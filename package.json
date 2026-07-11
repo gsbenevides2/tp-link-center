@@ -1,25 +1,56 @@
 {
   "name": "tp-link-center",
-  "version": "0.1.0",
+  "displayName": "TP Link Center",
+  "version": "0.0.1",
   "private": true,
+  "description": "TP Link Center is Admin Dashboard to manager my tplink routers.",
+  "author": {
+    "email": "git@gui.dev.br",
+    "name": "Guilherme da Silva Benevides",
+    "url": "https://www.gui.dev.br"
+  },
+  "repository": {
+    "directory": ".",
+    "type": "git",
+    "url": "https://github.com/gsbenevides2/tp-link-center"
+  },
+  "license": "MIT",
+  "keywords": [
+    "TP Link",
+    "Router",
+    "Dashboard"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "dev": "bun --bun next dev",
+    "build": "bun --bun next build",
+    "start": "bun --bun next start",
+    "lint": "eslint",
+    "db:sync": "bun --bun run drizzle-kit push --config server/db/drizzle.config.ts",
+    "db:studio": "bun --bun run drizzle-kit studio --config server/db/drizzle.config.ts"
   },
   "dependencies": {
+    "@elysia/eden": "^1.4.10",
+    "@elysia/openapi": "^1.4.15",
+    "@tanstack/react-query": "^5.101.2",
+    "daisyui": "^5.6.17",
+    "drizzle-orm": "^1.0.0-rc.4",
+    "elysia": "^1.4.29",
     "next": "16.2.10",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "react-icons": "^5.7.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/bun": "^1.3.14",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "^1.0.0-rc.4",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "eslint-config-prettier": "^10.1.8",
     "tailwindcss": "^4",
     "typescript": "^5"
   },

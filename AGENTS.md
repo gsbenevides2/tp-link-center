@@ -1,3 +1,22 @@
+<!-- BEGIN:project-agent-rules -->
+# This is a Bun Project 
+
+Bun docs is available in https://bun.com/llms.txt please for install dependencies and run commands use bun install, bun run or bunx. See the docs for more info.
+<!-- END:project-agent-rules -->
+
+<!-- BEGIN:elysia-agent-rules -->
+# This project uses elysia framework
+
+Elysia is started in `app/api/` the elysia documentation is present in: https://elysiajs.com/llms.txt. See the docs for more info.
+<!-- END:elysia-agent-rules -->
+
+<!-- BEGIN:daisy-ui-agent-rules -->
+# This project uses daisy framework
+
+Daisy UI is a CSS library for Tailwind CSS 4 and provides class names for common UI components, semantic color names and themes.
+See the docs in: https://daisyui.com/llms.txt 
+<!-- END:elysia-agent-rules -->
+
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
 
