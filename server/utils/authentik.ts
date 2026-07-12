@@ -1,8 +1,23 @@
+import * as jose from "jose";
+
 const { AUTHENTIK_ENDPOINT, AUTHENTIK_USER, AUTHENTIK_PASSWORD } = process.env;
 
 if (!AUTHENTIK_ENDPOINT) throw new Error("Missing AUTHENTIK_ENDPOINT");
 if (!AUTHENTIK_USER) throw new Error("Missing AUTHENTIK_USER");
 if (!AUTHENTIK_PASSWORD) throw new Error("Missing AUTHENTIK_PASSWORD");
+
+function getExpirationFromJWT(token: string): number | null {
+  try {
+    const decoded = jose.decodeJwt(token);
+    if (decoded && typeof decoded.exp === "number") {
+      return decoded.exp;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error decoding JWT:", error);
+    return null;
+  }
+}
 
 export async function getAccessToken(clientId: string) {
   const tokenUrl = new URL("/application/o/token/", AUTHENTIK_ENDPOINT!);
@@ -25,5 +40,8 @@ export async function getAccessToken(clientId: string) {
     throw new Error("Authentik Login Failed");
   }
   const json = (await response.json()) as { access_token: string };
-  return json.access_token;
+  return {
+    token: json.access_token,
+    exp: getExpirationFromJWT(json.access_token),
+  };
 }
