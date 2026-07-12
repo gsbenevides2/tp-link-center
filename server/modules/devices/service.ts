@@ -26,4 +26,21 @@ export abstract class Device {
     await db.delete(interfaces).where(eq(interfaces.deviceId, params.id));
     await db.delete(devices).where(eq(devices.id, params.id));
   }
+  static async getDeviceNameOfMac(mac: string): Promise<string | undefined> {
+    const dbInterface = await db.query.interfaces.findFirst({
+      columns: {},
+      where: {
+        mac,
+      },
+      with: {
+        devices: {
+          columns: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    return dbInterface?.devices?.name;
+  }
 }

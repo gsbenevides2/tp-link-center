@@ -100,7 +100,7 @@ export const DeviceModel = {
     id: () =>
       z.uuid().meta({
         title: "Device ID",
-        description: "ID of device created.",
+        description: "ID of device to delete.",
         example: crypto.randomUUID(),
       }),
   }).pick({ id: true }),
