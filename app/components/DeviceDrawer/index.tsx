@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useDevicesQuery } from "../RegisteredDevicesSection/useDevices";
+import { ConnectionHistory } from "./ConnectionHistory";
 import { DeviceInfo } from "./DeviceInfo";
 import { InterfaceList } from "./InterfaceList";
 
@@ -54,7 +55,9 @@ export function DeviceDrawer() {
             />
           ) : null}
 
-          <h3 className="mb-2 font-bold text-base">Histórico de Conexão</h3>
+          {selectedDevice ? (
+            <ConnectionHistory deviceId={selectedDevice.id} />
+          ) : null}
         </div>
       </div>
     </div>
