@@ -6,10 +6,11 @@ interface Props {
   required?: boolean;
   type?: string;
   errorMessage?: string;
+  pattern?: string;
 }
 
 export default function Input(props: Props) {
-  const hasValidator = props.required;
+  const hasValidator = props.required || props.pattern;
   return (
     <fieldset className="fieldset">
       <label className="label" htmlFor={props.label}>
@@ -23,6 +24,7 @@ export default function Input(props: Props) {
           id={props.label}
           required={props.required}
           placeholder={props.placeholder}
+          pattern={props.pattern}
           name={props.label}
         />
       </div>

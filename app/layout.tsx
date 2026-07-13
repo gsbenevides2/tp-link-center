@@ -5,6 +5,7 @@ import { displayName, description } from "@/package.json";
 import { Header } from "@/app/components/Header";
 import { Providers } from "@/app/providers";
 import { AddDeviceModal } from "./components/AddDeviceModal";
+import { AddInterfaceModal } from "./components/AddInterfaceModal";
 import { DeviceDrawer } from "./components/DeviceDrawer";
 
 const openSans = Arimo({
@@ -28,6 +29,7 @@ export default function RootLayout({
         <Providers>
           <Header />
           <AddDeviceModal />
+          <AddInterfaceModal />
           <DeviceDrawer />
           <main className="px-12 pt-4">{children}</main>
         </Providers>

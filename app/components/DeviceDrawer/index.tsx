@@ -44,11 +44,14 @@ export function DeviceDrawer() {
           aria-label="close sidebar"
           className="drawer-overlay"
         ></label>
-        <div className="bg-white p-4 w-100 min-h-full">
+        <div className="bg-white p-4 w-180 min-h-full">
           {selectedDevice ? <DeviceInfo device={selectedDevice} /> : null}
 
           {selectedDevice ? (
-            <InterfaceList interfaces={selectedDevice.interfaces} />
+            <InterfaceList
+              deviceId={selectedDevice.id}
+              interfaces={selectedDevice.interfaces}
+            />
           ) : null}
 
           <h3 className="mb-2 font-bold text-base">Histórico de Conexão</h3>
