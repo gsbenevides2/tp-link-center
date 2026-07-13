@@ -1,36 +1,111 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TP-Link Center
+
+Admin dashboard to manage TP-Link routers, monitor connected devices, and track uptime history.
+
+## Features
+
+- **Device Management** — Register and manage network devices with multiple interfaces (MAC + IP)
+- **Live Status Detection** — Scrapes the TP-Link router web interface via Puppeteer to detect online/offline devices
+- **Uptime Tracking** — Automatic online checks every 5 minutes with 24-hour connection history per device
+- **Unregistered Device Discovery** — Identify devices connected to the router that aren't yet registered, link or register them directly
+- **MAC Vendor Lookup** — Resolves MAC addresses to vendor names (e.g., TP-Link, Apple)
+- **OpenAPI Documentation** — Full API docs with Scalar UI at `/api`
+
+## Tech Stack
+
+- **Runtime:** Bun
+- **Frontend:** Next.js 16 (App Router) + React 19 + Tailwind CSS 4 + DaisyUI
+- **Backend:** Elysia (API framework, proxied via Next.js catch-all route)
+- **Database:** PostgreSQL + Drizzle ORM
+- **API Client:** Elysia Eden (type-safe)
+- **Browser Automation:** Puppeteer-core + CloakBrowser (remote browser)
+- **Auth:** Authentik (OAuth2 client_credentials)
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Bun
+- PostgreSQL
+- TP-Link router with web admin interface
+- Authentik instance + CloakBrowser service (for remote browser scraping)
+
+### Environment Variables
+
+Copy `.env.example` to `.env` and fill in:
+
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `ROUTER_ENPOINT` | TP-Link router web admin URL |
+| `ROUTER_PASSWORD` | TP-Link router login password |
+| `AUTHENTIK_ENDPOINT` | Authentik server URL |
+| `AUTHENTIK_USER` | Authentik service account username |
+| `AUTHENTIK_PASSWORD` | Authentik service account password |
+| `AUTHENTIK_CLOAKBROWSER_CLIENT_ID` | Authentik OAuth2 client ID for CloakBrowser |
+| `CLOAKBROWSER_ENDPOINT` | CloakBrowser service URL |
+| `CLOAKBROWSER_PROFILE_ID` | CloakBrowser profile ID to use |
+
+### Install & Run
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+bun install
+bun run db:sync    # Push schema to database
+bun run dev        # Start dev server at http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Scripts
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Script | Description |
+|--------|-------------|
+| `bun run dev` | Start development server |
+| `bun run build` | Build for production |
+| `bun run start` | Start production server |
+| `bun run lint` | Run ESLint |
+| `bun run db:sync` | Push Drizzle schema to database |
+| `bun run db:studio` | Open Drizzle Studio |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Project Structure
 
-## Learn More
+```
+.
+├── app/                        # Next.js frontend
+│   ├── api/                    # Elysia API proxy + typed clients
+│   ├── components/             # React components (UI)
+│   │   ├── Header/
+│   │   ├── RegisteredDevicesSection/
+│   │   ├── UnregisteredDevicesSection/
+│   │   ├── DeviceDrawer/
+│   │   ├── AddDeviceModal/
+│   │   └── AddInterfaceModal/
+│   └── page.tsx                # Main page
+├── server/                     # Elysia backend
+│   ├── modules/
+│   │   ├── devices/            # Device CRUD (routes, service, model)
+│   │   ├── router/             # TP-Link router scraping service
+│   │   └── checks/             # Online check logic
+│   ├── db/                     # Drizzle schema + connection
+│   ├── utils/                  # Authentik OAuth, helpers
+│   ├── cron.ts                 # Periodic online check job
+│   └── index.ts                # Elysia app entry
+└── instrumentation.ts          # Next.js instrumentation (cron registration)
+```
 
-To learn more about Next.js, take a look at the following resources:
+## API Reference
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/devices/` | List all devices with interfaces |
+| `POST` | `/api/devices/` | Create a device |
+| `PUT` | `/api/devices/:id` | Update a device |
+| `DELETE` | `/api/devices/:id` | Delete a device and its interfaces |
+| `POST` | `/api/devices/:id/interface` | Add a network interface to a device |
+| `PUT` | `/api/devices/:id/interface/:interfaceId` | Update a network interface |
+| `DELETE` | `/api/devices/:id/interface/:interfaceId` | Delete a network interface |
+| `GET` | `/api/devices/:id/history?from=&to=` | Get connection history for a time range |
+| `GET` | `/api/router/connected-devices` | Scrape router for currently connected devices |
+| `GET` | `/api/checks/latest` | Get the latest online check snapshot |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## License
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT
