@@ -26,6 +26,12 @@ export abstract class Device {
     await db.delete(interfaces).where(eq(interfaces.deviceId, params.id));
     await db.delete(devices).where(eq(devices.id, params.id));
   }
+  static async update(
+    params: DeviceModel["updateParams"],
+    body: DeviceModel["updateBody"],
+  ) {
+    await db.update(devices).set(body).where(eq(devices.id, params.id));
+  }
   static async createInterface(
     deviceId: string,
     body: DeviceModel["createInterfaceBody"],

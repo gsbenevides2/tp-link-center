@@ -53,6 +53,21 @@ export const device = new Elysia({
       params: DeviceModel.deleteParams,
     },
   )
+  .put(
+    "/:id",
+    async ({ params, body }) => {
+      await Device.update(params, body);
+      return status(StatusMap.OK);
+    },
+    {
+      detail: {
+        summary: "Update Device",
+        description: "Update device name and brand.",
+      },
+      params: DeviceModel.updateParams,
+      body: DeviceModel.updateBody,
+    },
+  )
   .post(
     "/:id/interface",
     async ({ params, body }) => {

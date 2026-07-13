@@ -2,6 +2,7 @@
 
 import {
   VscAddCompact,
+  VscEdit,
   VscOpenInWindow,
   VscRefreshCompact,
   VscTrash,
@@ -35,7 +36,7 @@ export function RegisteredDevicesSection() {
         <div className="flex gap-1">
           <button
             className="btn btn-sm btn-ghost"
-            onClick={addDeviceModal?.open}
+            onClick={() => addDeviceModal?.open()}
           >
             <VscAddCompact />
           </button>
@@ -72,6 +73,12 @@ export function RegisteredDevicesSection() {
                 <td className="w-68">
                   <button
                     className="btn btn-sm btn-ghost"
+                    onClick={() => addDeviceModal?.open(device)}
+                  >
+                    <VscEdit />
+                  </button>
+                  <button
+                    className="ml-1 btn btn-sm btn-ghost"
                     onClick={() => deleteModalState.open(device)}
                   >
                     {isPending && variables === device.id ? (

@@ -49,6 +49,25 @@ export function useAddDevice() {
   });
 }
 
+export function useUpdateDevice() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      deviceId,
+      body,
+    }: {
+      deviceId: string;
+      body: { name: string; brand: string };
+    }) => {
+      await clientSideApi.devices({ id: deviceId }).put(body);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [DEVICES_KEY] });
+    },
+  });
+}
+
 type AddInterfaceParams = Parameters<
   ReturnType<typeof clientSideApi.devices>["interface"]["post"]
 >[0];

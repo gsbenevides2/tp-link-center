@@ -104,6 +104,29 @@ export const DeviceModel = {
         example: crypto.randomUUID(),
       }),
   }).pick({ id: true }),
+  // Update Device
+  updateParams: createSelectSchema(devices, {
+    id: () =>
+      z.uuid().meta({
+        title: "Device ID",
+        description: "ID of device to update.",
+        example: crypto.randomUUID(),
+      }),
+  }).pick({ id: true }),
+  updateBody: createInsertSchema(devices, {
+    name: (schema) =>
+      schema.meta({
+        title: "Name of Device",
+        description: "New name of device.",
+        example: "Switch",
+      }),
+    brand: (schema) =>
+      schema.meta({
+        title: "Brand of Device",
+        description: "New brand of device.",
+        example: "Cisco",
+      }),
+  }).omit({ id: true }),
   // Create Interface
   createInterfaceParams: createSelectSchema(devices, {
     id: () =>

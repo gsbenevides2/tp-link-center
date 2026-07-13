@@ -7,6 +7,7 @@ interface Props {
   type?: string;
   errorMessage?: string;
   pattern?: string;
+  defaultValue?: string;
 }
 
 export default function Input(props: Props) {
@@ -26,6 +27,7 @@ export default function Input(props: Props) {
           placeholder={props.placeholder}
           pattern={props.pattern}
           name={props.label}
+          defaultValue={props.defaultValue}
         />
       </div>
       <p className="validator-hint">{props.errorMessage}</p>

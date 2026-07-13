@@ -1,11 +1,11 @@
 "use client";
 
-import { useRef, useCallback, useLayoutEffect, SubmitEvent } from "react";
+import { useRef, useCallback, useLayoutEffect, useState, SubmitEvent } from "react";
 import Input from "../Input";
-import { useAddDevice } from "../RegisteredDevicesSection/useDevices";
+import { useAddDevice, useUpdateDevice, type Device } from "../RegisteredDevicesSection/useDevices";
 
 interface Context {
-  open: () => void;
+  open: (device?: Device) => void;
   close: () => void;
 }
 
@@ -18,16 +18,23 @@ declare global {
 export function AddDeviceModal() {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
-  const { mutateAsync } = useAddDevice();
+  const { mutateAsync: addDevice } = useAddDevice();
+  const { mutateAsync: updateDevice } = useUpdateDevice();
+  const [editingDevice, setEditingDevice] = useState<Device>();
+
+  const isEditing = Boolean(editingDevice);
 
   const closeModal = useCallback(() => {
     if (!dialogRef.current) return;
     if (!formRef.current) return;
     formRef.current.reset();
     dialogRef.current.close();
+    setEditingDevice(undefined);
   }, [dialogRef, formRef]);
-  const openModal = useCallback(() => {
+
+  const openModal = useCallback((device?: Device) => {
     if (!dialogRef.current) return;
+    setEditingDevice(device);
     dialogRef.current.open = true;
   }, [dialogRef]);
 
@@ -36,13 +43,17 @@ export function AddDeviceModal() {
       event.preventDefault();
       const currentForm = event.currentTarget;
       const data = new FormData(currentForm);
-      await mutateAsync({
-        brand: data.get("Fabricante do Dispositivo")?.toString() ?? "",
-        name: data.get("Nome do Dispositivo")?.toString() ?? "",
-      });
+      const name = data.get("Nome do Dispositivo")?.toString() ?? "";
+      const brand = data.get("Fabricante do Dispositivo")?.toString() ?? "";
+
+      if (editingDevice) {
+        await updateDevice({ deviceId: editingDevice.id, body: { name, brand } });
+      } else {
+        await addDevice({ name, brand });
+      }
       closeModal();
     },
-    [closeModal, mutateAsync],
+    [closeModal, addDevice, updateDevice, editingDevice],
   );
 
   useLayoutEffect(() => {
@@ -55,7 +66,9 @@ export function AddDeviceModal() {
   return (
     <dialog ref={dialogRef} className="modal" onClose={closeModal}>
       <div className="max-w-100 modal-box">
-        <h3 className="font-bold text-lg">Adicionar Dispositivo</h3>
+        <h3 className="font-bold text-lg">
+          {isEditing ? "Editar Dispositivo" : "Adicionar Dispositivo"}
+        </h3>
         <form
           className="flex flex-col gap-2 py-4"
           onSubmit={handleSubmit}
@@ -66,19 +79,21 @@ export function AddDeviceModal() {
             label="Nome do Dispositivo"
             placeholder="Digite o nome do dispositivo:"
             errorMessage="Preenchimento Obrigatório."
+            defaultValue={editingDevice?.name}
           />
           <Input
             required
             label="Fabricante do Dispositivo"
             placeholder="Digite o fabricante do dispositivo:"
             errorMessage="Preenchimento Obrigatório."
+            defaultValue={editingDevice?.brand}
           />
           <div className="modal-action">
             <button className="btn" type="button" onClick={closeModal}>
               Cancelar
             </button>
             <button className="btn btn-primary" type="submit">
-              Cadastrar
+              {isEditing ? "Salvar" : "Cadastrar"}
             </button>
           </div>
         </form>
