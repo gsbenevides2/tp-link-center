@@ -27,6 +27,12 @@ export function DeviceDrawer() {
     latestCheck?.devices.map((d) => d.mac.toLowerCase()) ?? [],
   );
 
+  const macToRouterInterface = new Map(
+    latestCheck?.devices
+      .filter((d): d is typeof d & { routerInterface: string } => d.routerInterface != null)
+      .map((d) => [d.mac.toLowerCase(), d.routerInterface]) ?? [],
+  );
+
   const openDeviceDrawer = useCallback((deviceId: string) => {
     setOpenedDeviceId(deviceId);
   }, []);
@@ -60,6 +66,7 @@ export function DeviceDrawer() {
               deviceId={selectedDevice.id}
               interfaces={selectedDevice.interfaces}
               onlineMacs={onlineMacs}
+              macToRouterInterface={macToRouterInterface}
             />
           ) : null}
 

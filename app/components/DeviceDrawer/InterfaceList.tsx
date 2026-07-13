@@ -12,9 +12,10 @@ interface Props {
   deviceId: string;
   interfaces: Interface[];
   onlineMacs: Set<string>;
+  macToRouterInterface: Map<string, string>;
 }
 
-export function InterfaceList({ interfaces, deviceId, onlineMacs }: Props) {
+export function InterfaceList({ interfaces, deviceId, onlineMacs, macToRouterInterface }: Props) {
   const addInterfaceModal = useAddInterfaceModal();
   const deleteInterfaceModal = useDeleteInterfaceModal(deviceId);
   const hasInterfaces = interfaces.length > 0;
@@ -38,6 +39,7 @@ export function InterfaceList({ interfaces, deviceId, onlineMacs }: Props) {
                 <th>Nome</th>
                 <th>MAC</th>
                 <th>IP</th>
+                <th>Roteador</th>
                 <th>Status</th>
                 <th className="w-24">Ações</th>
               </tr>
@@ -45,11 +47,19 @@ export function InterfaceList({ interfaces, deviceId, onlineMacs }: Props) {
             <tbody>
               {interfaces.map((iface) => {
                 const isOnline = onlineMacs.has(iface.mac.toLowerCase());
+                const routerInterface = macToRouterInterface.get(iface.mac.toLowerCase());
                 return (
                   <tr key={iface.id}>
                     <td>{iface.name}</td>
                     <td>{iface.mac}</td>
                     <td>{iface.ip}</td>
+                    <td>
+                      {isOnline && routerInterface ? (
+                        <span className="text-sm">{routerInterface}</span>
+                      ) : (
+                        <span className="text-xs text-base-content/50">-</span>
+                      )}
+                    </td>
                     <td>
                       <span
                         className={`badge badge-sm ${isOnline ? "badge-success" : "badge-ghost"}`}

@@ -38,10 +38,24 @@ export function RegisteredDevicesSection() {
     latestCheck?.devices.map((d) => d.mac.toLowerCase()) ?? [],
   );
 
+  const macToRouterInterface = new Map(
+    latestCheck?.devices
+      .filter((d): d is typeof d & { routerInterface: string } => d.routerInterface != null)
+      .map((d) => [d.mac.toLowerCase(), d.routerInterface]) ?? [],
+  );
+
   function isDeviceOnline(device: NonNullable<typeof devices>[number]) {
     return device.interfaces.some((iface) =>
       onlineMacs.has(iface.mac.toLowerCase()),
     );
+  }
+
+  function getDeviceRouterInterface(device: NonNullable<typeof devices>[number]) {
+    for (const iface of device.interfaces) {
+      const routerIface = macToRouterInterface.get(iface.mac.toLowerCase());
+      if (routerIface) return routerIface;
+    }
+    return null;
   }
 
   return (
@@ -71,6 +85,7 @@ export function RegisteredDevicesSection() {
               <th className="w-94">ID</th>
               <th>Nome</th>
               <th>Fabricante</th>
+              <th>Roteador</th>
               <th>Status</th>
               <th className="w-68">Ações</th>
             </tr>
@@ -81,11 +96,19 @@ export function RegisteredDevicesSection() {
             {isEmpty ? <EmptyMessage /> : null}
             {devices?.map((device) => {
               const online = isDeviceOnline(device);
+              const routerInterface = getDeviceRouterInterface(device);
               return (
                 <tr key={device.id}>
                   <th className="w-94">{device.id}</th>
                   <td>{device.name}</td>
                   <td>{device.brand}</td>
+                  <td>
+                    {routerInterface ? (
+                      <span className="text-sm">{routerInterface}</span>
+                    ) : (
+                      <span className="text-xs text-base-content/50">-</span>
+                    )}
+                  </td>
                   <td>
                     {online ? (
                       <span className="badge badge-success badge-sm">

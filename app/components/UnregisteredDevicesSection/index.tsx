@@ -127,20 +127,21 @@ export function UnregisteredDevicesSection() {
               <th>Fabricante</th>
               <th>MAC</th>
               <th>IP</th>
+              <th>Roteador</th>
               <th className="w-48">Ações</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={5} className="text-center">
+                <td colSpan={6} className="text-center">
                   <span className="loading loading-spinner loading-sm"></span>
                 </td>
               </tr>
             ) : null}
             {isEmpty ? (
               <tr>
-                <td colSpan={5} className="text-center text-base-content/60">
+                <td colSpan={6} className="text-center text-base-content/60">
                   Todos os dispositivos estão registrados.
                 </td>
               </tr>
@@ -151,6 +152,13 @@ export function UnregisteredDevicesSection() {
                 <td>{device.vendor}</td>
                 <td>{device.mac}</td>
                 <td>{device.ip}</td>
+                <td>
+                  {device.routerInterface ? (
+                    <span className="text-sm">{device.routerInterface}</span>
+                  ) : (
+                    <span className="text-xs text-base-content/50">-</span>
+                  )}
+                </td>
                 <td className="w-48">
                   <div className="flex gap-1">
                     <button

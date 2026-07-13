@@ -4,7 +4,6 @@ import { getVendor } from "mac-oui-lookup";
 import { RouterModel } from "./model";
 import { Device } from "../devices/service";
 import { StatusMap } from "elysia";
-import { readonly } from "zod";
 
 const {
   ROUTER_ENPOINT,
