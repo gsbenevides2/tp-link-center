@@ -64,17 +64,17 @@ export function ConnectionHistory({ deviceId }: Props) {
       <h3 className="mb-2 font-bold text-base">Histórico de Conexão</h3>
 
       <div className="mb-4 grid grid-cols-3 gap-2 text-center">
-        <div className="rounded bg-base-200 p-2">
+        <div className="rounded bg-base-100 border border-base-300 p-2">
           <div className="text-lg font-bold">{uptime}%</div>
-          <div className="text-xs">Uptime</div>
+          <div className="text-xs text-base-content/60">Uptime</div>
         </div>
-        <div className="rounded bg-success/20 p-2">
+        <div className="rounded bg-success/10 border border-success/30 p-2">
           <div className="text-lg font-bold text-success">{onlineChecks}</div>
-          <div className="text-xs">Online</div>
+          <div className="text-xs text-success/80">Online</div>
         </div>
-        <div className="rounded bg-error/20 p-2">
+        <div className="rounded bg-error/10 border border-error/30 p-2">
           <div className="text-lg font-bold text-error">{totalChecks - onlineChecks}</div>
-          <div className="text-xs">Offline</div>
+          <div className="text-xs text-error/80">Offline</div>
         </div>
       </div>
 
@@ -84,6 +84,7 @@ export function ConnectionHistory({ deviceId }: Props) {
             <tr>
               <th>Data/Hora</th>
               <th>Status</th>
+              <th>Interfaces</th>
             </tr>
           </thead>
           <tbody>
@@ -103,6 +104,19 @@ export function ConnectionHistory({ deviceId }: Props) {
                   >
                     {check.online ? "Online" : "Offline"}
                   </span>
+                </td>
+                <td>
+                  {check.interfaces.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {check.interfaces.map((iface) => (
+                        <span key={iface.mac} className="text-sm">
+                          {iface.name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-base-content/50">-</span>
+                  )}
                 </td>
               </tr>
             ))}

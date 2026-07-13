@@ -37,10 +37,11 @@ export abstract class Check {
   ): Promise<CheckModel["getDeviceHistoryResponse"]> {
     const deviceInterfaces = await db.query.interfaces.findMany({
       where: { deviceId: params.id },
-      columns: { mac: true },
+      columns: { mac: true, name: true },
     });
 
     const deviceMacs = deviceInterfaces.map((i) => i.mac);
+    const macToName = new Map(deviceInterfaces.map((i) => [i.mac, i.name]));
 
     const checks = await db
       .select()
@@ -72,12 +73,25 @@ export abstract class Check {
             )
         : [];
 
-    const onlineCheckIds = new Set(onlineDeviceChecks.map((c) => c.checkId));
+    const onlineByCheck = new Map<string, Set<string>>();
+    for (const odc of onlineDeviceChecks) {
+      if (!onlineByCheck.has(odc.checkId)) {
+        onlineByCheck.set(odc.checkId, new Set());
+      }
+      onlineByCheck.get(odc.checkId)!.add(odc.mac);
+    }
 
-    return checks.map((check) => ({
-      checkId: check.id,
-      createdAt: check.createdAt.getTime(),
-      online: onlineCheckIds.has(check.id),
-    }));
+    return checks.map((check) => {
+      const onlineMacs = onlineByCheck.get(check.id) ?? new Set();
+      return {
+        checkId: check.id,
+        createdAt: check.createdAt.getTime(),
+        online: onlineMacs.size > 0,
+        interfaces: Array.from(onlineMacs).map((mac) => ({
+          mac,
+          name: macToName.get(mac) ?? mac,
+        })),
+      };
+    });
   }
 }

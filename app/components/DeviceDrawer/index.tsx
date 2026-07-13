@@ -1,6 +1,9 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { useDevicesQuery } from "../RegisteredDevicesSection/useDevices";
+import {
+  useDevicesQuery,
+  useLatestCheckQuery,
+} from "../RegisteredDevicesSection/useDevices";
 import { ConnectionHistory } from "./ConnectionHistory";
 import { DeviceInfo } from "./DeviceInfo";
 import { InterfaceList } from "./InterfaceList";
@@ -18,7 +21,11 @@ declare global {
 export function DeviceDrawer() {
   const [openedDeviceId, setOpenedDeviceId] = useState<string>();
   const { data } = useDevicesQuery();
+  const { data: latestCheck } = useLatestCheckQuery();
   const selectedDevice = data?.find((d) => d.id === openedDeviceId);
+  const onlineMacs = new Set(
+    latestCheck?.devices.map((d) => d.mac.toLowerCase()) ?? [],
+  );
 
   const openDeviceDrawer = useCallback((deviceId: string) => {
     setOpenedDeviceId(deviceId);
@@ -45,13 +52,14 @@ export function DeviceDrawer() {
           aria-label="close sidebar"
           className="drawer-overlay"
         ></label>
-        <div className="bg-white p-4 w-180 min-h-full">
+        <div className="bg-white p-4 w-200 min-h-full">
           {selectedDevice ? <DeviceInfo device={selectedDevice} /> : null}
 
           {selectedDevice ? (
             <InterfaceList
               deviceId={selectedDevice.id}
               interfaces={selectedDevice.interfaces}
+              onlineMacs={onlineMacs}
             />
           ) : null}
 

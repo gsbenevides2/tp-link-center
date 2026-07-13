@@ -112,12 +112,31 @@ export const CheckModel = {
             "Whether any interface of the device was found online in this check.",
           example: true,
         }),
+        interfaces: z
+          .array(
+            z.object({
+              mac: z.string().meta({
+                title: "MAC Address",
+                description: "MAC address of the interface.",
+                example: "00:1A:2B:3C:4D:5E",
+              }),
+              name: z.string().meta({
+                title: "Name",
+                description: "Name of the interface.",
+                example: "LAN1",
+              }),
+            }),
+          )
+          .meta({
+            title: "Online Interfaces",
+            description: "List of interfaces that were online in this check.",
+          }),
       }),
     )
     .meta({
       title: "Device History",
       description:
-        "List of checks in the given period with online status for the device.",
+        "List of checks in the given period with online status and interfaces for the device.",
     }),
 } as const;
 
