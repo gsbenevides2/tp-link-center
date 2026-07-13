@@ -91,7 +91,6 @@ export function RegisteredDevicesSection() {
                     <button
                       className="btn btn-sm btn-ghost"
                       onClick={() => {
-                        console.log(deviceDrawer);
                         deviceDrawer?.open(device.id);
                       }}
                     >
