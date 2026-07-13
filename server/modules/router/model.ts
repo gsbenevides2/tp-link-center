@@ -26,6 +26,12 @@ export const RouterModel = {
           description: "Name of database or name of device reported to router.",
           example: "Moto G7",
         }),
+        routerInterface: z.string().meta({
+          title: "Router Interface",
+          description:
+            "The router interface where the device was found, mapped from 'Teste de Conexão'.",
+          example: "Wifi 2.4 GHz no Canal 10",
+        }),
       }),
     )
     .meta({

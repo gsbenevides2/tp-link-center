@@ -111,6 +111,11 @@ export function ConnectionHistory({ deviceId }: Props) {
                       {check.interfaces.map((iface) => (
                         <span key={iface.mac} className="text-sm">
                           {iface.name}
+                          {iface.routerInterface ? (
+                            <span className="text-xs text-base-content/50 ml-1">
+                              ({iface.routerInterface})
+                            </span>
+                          ) : null}
                         </span>
                       ))}
                     </div>

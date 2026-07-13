@@ -23,6 +23,7 @@ export async function performOnlineCheck() {
           checkId,
           name: d.name,
           vendor: d.vendor,
+          routerInterface: d.routerInterface,
         })),
       );
     }

@@ -4,6 +4,7 @@ import { getVendor } from "mac-oui-lookup";
 import { RouterModel } from "./model";
 import { Device } from "../devices/service";
 import { StatusMap } from "elysia";
+import { readonly } from "zod";
 
 const {
   ROUTER_ENPOINT,
@@ -22,10 +23,23 @@ if (!CLOAKBROWSER_PROFILE_ID)
   throw new Error("Missing CLOAKBROWSER_PROFILE_ID");
 if (!CLOAKBROWSER_ENDPOINT) throw new Error("Missing CLOAKBROWSER_ENDPOINT");
 
-const SESSION_TTL = 5 * 60 * 1000;
-const TOKEN_TTL = 55 * 60 * 1000;
+const CONNECTION_TEST_MAP: Record<string, string> = {
+  Cabeado: "Conexão Cabeada",
+  "--": "Roteador",
+};
 
-const EasyMeshCols = [
+function mapConnectionTest(value: string): string {
+  if (value in CONNECTION_TEST_MAP) {
+    return CONNECTION_TEST_MAP[value];
+  }
+  const wifiMatch = value.match(/^(\d+(?:\.\d+)?)GHz_CH(\d+)$/);
+  if (wifiMatch) {
+    return `Wifi ${wifiMatch[1]} GHz no Canal ${wifiMatch[2]}`;
+  }
+  return value;
+}
+
+type EasyMeshCols = readonly [
   "ID",
   "Nome do Dispositivo",
   "Endereço IP",
@@ -34,8 +48,8 @@ const EasyMeshCols = [
   "Força de Sinal",
   "Link Rate",
   "Operação",
-] as const;
-const WiredRe0StatCols = [
+];
+type WiredRe0StatCols = readonly [
   "ID",
   "Nome",
   "Endereço IP",
@@ -43,18 +57,18 @@ const WiredRe0StatCols = [
   "Teste de Conexão",
   "Link Rate",
   "Attached To",
-] as const;
-const LanStatTable = [
+];
+type LanStatTable = readonly [
   "Porta LAN",
   "Status",
   "Velocidade de Negociação",
-] as const;
+];
 
 type SimpleStats = {
-  tableEasymeshStat: Record<(typeof EasyMeshCols)[number], string>[];
-  tableWiredRe0Stat: Record<(typeof WiredRe0StatCols)[number], string>[];
-  tableWlRe0Stat: Record<(typeof WiredRe0StatCols)[number], string>[];
-  tableLanStat: Record<(typeof LanStatTable)[number], string>[];
+  tableEasymeshStat: Record<EasyMeshCols[number], string>[];
+  tableWiredRe0Stat: Record<WiredRe0StatCols[number], string>[];
+  tableWlRe0Stat: Record<WiredRe0StatCols[number], string>[];
+  tableLanStat: Record<LanStatTable[number], string>[];
   map_grid_internet: { label: string; value: string }[];
   router_panel: { title: string; items: { title: string; value: string }[] }[];
 };
@@ -63,7 +77,6 @@ export abstract class Router {
   private static accessToken: string | null = null;
   private static accessTokenExp: number | null = null;
   private static browser: Browser | null = null;
-  private static page: Page | null = null;
   private static vendorCache = new Map<string, string>();
 
   private static async ensureToken() {
@@ -221,16 +234,19 @@ export abstract class Router {
         mac: x["Endereço MAC"],
         ip: x["Endereço IP"],
         name: x["Nome do Dispositivo"],
+        routerInterface: mapConnectionTest(x["Teste de Conexão"]),
       })),
       ...simpleStats.tableWiredRe0Stat.map((x) => ({
         mac: x["Endereço MAC"],
         ip: x["Endereço IP"],
         name: x["Nome"],
+        routerInterface: mapConnectionTest(x["Teste de Conexão"]),
       })),
       ...simpleStats.tableWlRe0Stat.map((x) => ({
         mac: x["Endereço MAC"],
         ip: x["Endereço IP"],
         name: x["Nome"],
+        routerInterface: mapConnectionTest(x["Teste de Conexão"]),
       })),
     ];
 
@@ -240,6 +256,7 @@ export abstract class Router {
         ip: row.ip,
         vendor: this.getVendorCached(row.mac),
         name: (await Device.getDeviceNameOfMac(row.mac)) ?? row.name ?? "",
+        routerInterface: row.routerInterface,
       })),
     );
   }

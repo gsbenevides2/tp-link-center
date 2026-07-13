@@ -1,7 +1,7 @@
 import type { CheckModel } from "@/server/modules/checks/model";
 import { db } from "@/server/db";
-import { interfaces, onlineChecks, onlineDevicesChecks } from "@/server/db/schema";
-import { desc, eq, and, gte, lte, inArray } from "drizzle-orm";
+import { onlineChecks, onlineDevicesChecks } from "@/server/db/schema";
+import { desc, and, gte, lte, inArray } from "drizzle-orm";
 
 export abstract class Check {
   static async getLatest(): Promise<CheckModel["getLatestCheckResponse"]> {
@@ -27,6 +27,7 @@ export abstract class Check {
         vendor: d.vendor,
         name: d.name,
         checkId: d.checkId,
+        routerInterface: d.routerInterface,
       })),
     };
   }
@@ -74,11 +75,16 @@ export abstract class Check {
         : [];
 
     const onlineByCheck = new Map<string, Set<string>>();
+    const routerInterfaceByCheckMac = new Map<string, string>();
     for (const odc of onlineDeviceChecks) {
       if (!onlineByCheck.has(odc.checkId)) {
         onlineByCheck.set(odc.checkId, new Set());
       }
       onlineByCheck.get(odc.checkId)!.add(odc.mac);
+      routerInterfaceByCheckMac.set(
+        `${odc.checkId}:${odc.mac}`,
+        odc.routerInterface ?? "Unknown",
+      );
     }
 
     return checks.map((check) => {
@@ -90,6 +96,8 @@ export abstract class Check {
         interfaces: Array.from(onlineMacs).map((mac) => ({
           mac,
           name: macToName.get(mac) ?? mac,
+          routerInterface:
+            routerInterfaceByCheckMac.get(`${check.id}:${mac}`) ?? "",
         })),
       };
     });

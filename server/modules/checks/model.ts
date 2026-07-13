@@ -59,6 +59,13 @@ export const CheckModel = {
                 description: "ID of the check this entry belongs to.",
                 example: crypto.randomUUID(),
               }),
+            routerInterface: () =>
+              z.string().meta({
+                title: "Router Interface",
+                description:
+                  "The router interface where the device was found, mapped from 'Teste de Conexão'.",
+                example: "Wifi 2.4 GHz no Canal 10",
+              }),
           }),
         )
         .meta({
@@ -124,6 +131,12 @@ export const CheckModel = {
                 title: "Name",
                 description: "Name of the interface.",
                 example: "LAN1",
+              }),
+              routerInterface: z.string().meta({
+                title: "Router Interface",
+                description:
+                  "The router interface where the device was found, mapped from 'Teste de Conexão'.",
+                example: "Wifi 2.4 GHz no Canal 10",
               }),
             }),
           )

@@ -1,7 +1,7 @@
 import { defineRelations, sql } from "drizzle-orm";
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
-export const devices = sqliteTable("devices", {
+export const devices = pgTable("devices", {
   id: text()
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -9,7 +9,7 @@ export const devices = sqliteTable("devices", {
   brand: text().notNull(),
 });
 
-export const interfaces = sqliteTable("interfaces", {
+export const interfaces = pgTable("interfaces", {
   id: text()
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -19,18 +19,16 @@ export const interfaces = sqliteTable("interfaces", {
   deviceId: text().notNull(),
 });
 
-export const onlineChecks = sqliteTable("onlineChecks", {
+export const onlineChecks = pgTable("onlineChecks", {
   id: text()
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
-  createdAt: integer({
-    mode: "timestamp_ms",
-  })
+  createdAt: timestamp({ mode: "date" })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .default(sql`now()`),
 });
 
-export const onlineDevicesChecks = sqliteTable("onlineDeviceChecks", {
+export const onlineDevicesChecks = pgTable("onlineDeviceChecks", {
   id: text()
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -39,6 +37,7 @@ export const onlineDevicesChecks = sqliteTable("onlineDeviceChecks", {
   vendor: text().notNull(),
   name: text().notNull(),
   checkId: text().notNull(),
+  routerInterface: text().default("Unknown"),
 });
 
 export const relations = defineRelations(
