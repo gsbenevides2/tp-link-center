@@ -1,9 +1,9 @@
-import { DeviceList } from "@/app/components/DeviceList";
+import { RegisteredDevicesSection } from "@/app/components/RegisteredDevicesSection";
 
 export default function Home() {
   return (
     <>
-      <DeviceList />
+      <RegisteredDevicesSection />
     </>
   );
 }

@@ -29,6 +29,6 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts"
-, "app/components/DeviceList/LoadingMessage.tsz"  ],
+, "app/components/RegisteredDevicesSection/LoadingMessage.tsz"  ],
   "exclude": ["node_modules"]
 }

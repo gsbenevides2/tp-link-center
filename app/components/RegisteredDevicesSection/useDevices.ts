@@ -33,3 +33,18 @@ export function useRemoveDevice() {
     },
   });
 }
+
+type AddDeviceParams = Parameters<typeof clientSideApi.devices.post>[0];
+
+export function useAddDevice() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: AddDeviceParams) => {
+      await clientSideApi.devices.post(params);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [DEVICES_KEY] });
+    },
+  });
+}

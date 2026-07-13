@@ -6,6 +6,7 @@
   --color-primary: #4acbd6;
   --color-base-content: #000;
   --color-base-100: #fff;
+  --color-accent: #ffcb00;
 }
 
 * {
@@ -14,4 +15,11 @@
 
 .btn {
   --btn-fg: #fff;
+}
+
+.validator-hint {
+  display: none;
+}
+.validator:has(:user-invalid) ~ .validator-hint {
+  display: block;
 }
