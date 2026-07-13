@@ -70,7 +70,7 @@ export abstract class Device {
         mac,
       },
       with: {
-        devices: {
+        device: {
           columns: {
             name: true,
           },
@@ -78,6 +78,6 @@ export abstract class Device {
       },
     });
 
-    return dbInterface?.devices?.name;
+    return dbInterface?.device?.name;
   }
 }

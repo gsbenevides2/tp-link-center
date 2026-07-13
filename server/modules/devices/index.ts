@@ -1,6 +1,8 @@
 import { Elysia, status, StatusMap } from "elysia";
 import { DeviceModel } from "@/server/modules/devices/model";
 import { Device } from "@/server/modules/devices/service";
+import { CheckModel } from "@/server/modules/checks/model";
+import { Check } from "@/server/modules/checks/service";
 
 export const device = new Elysia({
   prefix: "/devices",
@@ -112,5 +114,26 @@ export const device = new Elysia({
         description: "Delete a network interface from a device.",
       },
       params: DeviceModel.deleteInterfaceParams,
+    },
+  )
+  .get(
+    "/:id/history",
+    async ({ params, query }) => {
+      return status(
+        StatusMap.OK,
+        await Check.getDeviceHistory(params, query),
+      );
+    },
+    {
+      detail: {
+        summary: "Get Device History",
+        description:
+          "Returns all checks in the given period with a boolean indicating if the device was online.",
+      },
+      params: DeviceModel.getDeviceHistoryParams,
+      query: CheckModel.getDeviceHistoryQuery,
+      response: {
+        [StatusMap.OK]: CheckModel.getDeviceHistoryResponse,
+      },
     },
   );

@@ -210,6 +210,14 @@ export const DeviceModel = {
       example: crypto.randomUUID(),
     }),
   }),
+  // Get Device History
+  getDeviceHistoryParams: z.object({
+    id: z.uuid().meta({
+      title: "Device ID",
+      description: "ID of device to get history for.",
+      example: crypto.randomUUID(),
+    }),
+  }),
 } as const;
 
 export type DeviceModel = {
