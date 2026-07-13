@@ -52,4 +52,22 @@ export const device = new Elysia({
       },
       params: DeviceModel.deleteParams,
     },
+  )
+  .post(
+    "/:id/interface",
+    async ({ params, body }) => {
+      const response = await Device.createInterface(params.id, body);
+      return status(StatusMap.Created, response);
+    },
+    {
+      detail: {
+        summary: "Create Interface",
+        description: "Create a network interface for a device.",
+      },
+      params: DeviceModel.createInterfaceParams,
+      body: DeviceModel.createInterfaceBody,
+      response: {
+        [StatusMap.Created]: DeviceModel.createInterfaceResponse,
+      },
+    },
   );

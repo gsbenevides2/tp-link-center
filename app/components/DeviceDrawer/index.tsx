@@ -1,6 +1,8 @@
 "use client";
-import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useDevicesQuery } from "../RegisteredDevicesSection/useDevices";
+import { DeviceInfo } from "./DeviceInfo";
+import { InterfaceList } from "./InterfaceList";
 
 interface Context {
   open: (deviceId: string) => void;
@@ -42,19 +44,15 @@ export function DeviceDrawer() {
           aria-label="close sidebar"
           className="drawer-overlay"
         ></label>
-        <ul className="bg-white p-4 w-100 min-h-full">
-          <h2>Detalhes do Dispositívo</h2>
-          <div>
-            <p>
-              <b>ID:</b> {selectedDevice?.id}
-              <br />
-              <b>Nome do Dispositivo:</b> {selectedDevice?.name}
-              <br />
-            </p>
-          </div>
-          <h3>Interfaces</h3>
-          <h3>Histórico de Conexão</h3>
-        </ul>
+        <div className="bg-white p-4 w-100 min-h-full">
+          {selectedDevice ? <DeviceInfo device={selectedDevice} /> : null}
+
+          {selectedDevice ? (
+            <InterfaceList interfaces={selectedDevice.interfaces} />
+          ) : null}
+
+          <h3 className="mb-2 font-bold text-base">Histórico de Conexão</h3>
+        </div>
       </div>
     </div>
   );

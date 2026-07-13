@@ -104,6 +104,43 @@ export const DeviceModel = {
         example: crypto.randomUUID(),
       }),
   }).pick({ id: true }),
+  // Create Interface
+  createInterfaceParams: createSelectSchema(devices, {
+    id: () =>
+      z.uuid().meta({
+        title: "Device ID",
+        description: "ID of device to add interface.",
+        example: crypto.randomUUID(),
+      }),
+  }).pick({ id: true }),
+  createInterfaceBody: createInsertSchema(interfaces, {
+    name: (schema) =>
+      schema.meta({
+        title: "Interface Name",
+        description: "Name of network interface.",
+        example: "GigabitEthernet0/1",
+      }),
+    mac: () =>
+      z.mac().meta({
+        title: "MAC Address",
+        description: "MAC address of interface.",
+        example: "00:1A:2B:3C:4D:5E",
+      }),
+    ip: () =>
+      z.ipv4().meta({
+        title: "IP Address",
+        description: "IP address of interface.",
+        example: "192.168.1.1",
+      }),
+  }).omit({ id: true, deviceId: true }),
+  createInterfaceResponse: createSelectSchema(interfaces, {
+    id: () =>
+      z.uuid().meta({
+        title: "Interface ID",
+        description: "ID of interface created.",
+        example: crypto.randomUUID(),
+      }),
+  }).pick({ id: true }),
 } as const;
 
 export type DeviceModel = {

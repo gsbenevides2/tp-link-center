@@ -26,6 +26,23 @@ export abstract class Device {
     await db.delete(interfaces).where(eq(interfaces.deviceId, params.id));
     await db.delete(devices).where(eq(devices.id, params.id));
   }
+  static async createInterface(
+    deviceId: string,
+    body: DeviceModel["createInterfaceBody"],
+  ): Promise<DeviceModel["createInterfaceResponse"]> {
+    const device = await db.query.devices.findFirst({
+      where: { id: deviceId },
+    });
+    if (!device) throw new Error("Device not found");
+
+    const created = await db
+      .insert(interfaces)
+      .values({ ...body, deviceId })
+      .returning();
+    const id = created.at(0)?.id;
+    if (!id) throw Error("Id not generated");
+    return { id };
+  }
   static async getDeviceNameOfMac(mac: string): Promise<string | undefined> {
     const dbInterface = await db.query.interfaces.findFirst({
       columns: {},
