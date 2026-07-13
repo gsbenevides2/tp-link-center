@@ -90,3 +90,49 @@ export function useAddInterface() {
     },
   });
 }
+
+export function useUpdateInterface() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      deviceId,
+      interfaceId,
+      body,
+    }: {
+      deviceId: string;
+      interfaceId: string;
+      body: { name: string; mac: string; ip: string };
+    }) => {
+      await clientSideApi
+        .devices({ id: deviceId })
+        .interface({ interfaceId })
+        .put(body);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [DEVICES_KEY] });
+    },
+  });
+}
+
+export function useDeleteInterface() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      deviceId,
+      interfaceId,
+    }: {
+      deviceId: string;
+      interfaceId: string;
+    }) => {
+      await clientSideApi
+        .devices({ id: deviceId })
+        .interface({ interfaceId })
+        .delete();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [DEVICES_KEY] });
+    },
+  });
+}

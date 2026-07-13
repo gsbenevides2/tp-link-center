@@ -49,6 +49,20 @@ export abstract class Device {
     if (!id) throw Error("Id not generated");
     return { id };
   }
+  static async updateInterface(
+    params: DeviceModel["updateInterfaceParams"],
+    body: DeviceModel["updateInterfaceBody"],
+  ) {
+    await db
+      .update(interfaces)
+      .set(body)
+      .where(eq(interfaces.id, params.interfaceId));
+  }
+  static async deleteInterface(
+    params: DeviceModel["deleteInterfaceParams"],
+  ) {
+    await db.delete(interfaces).where(eq(interfaces.id, params.interfaceId));
+  }
   static async getDeviceNameOfMac(mac: string): Promise<string | undefined> {
     const dbInterface = await db.query.interfaces.findFirst({
       columns: {},

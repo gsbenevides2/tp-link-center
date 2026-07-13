@@ -164,6 +164,52 @@ export const DeviceModel = {
         example: crypto.randomUUID(),
       }),
   }).pick({ id: true }),
+  // Update Interface
+  updateInterfaceParams: z.object({
+    id: z.uuid().meta({
+      title: "Device ID",
+      description: "ID of device.",
+      example: crypto.randomUUID(),
+    }),
+    interfaceId: z.uuid().meta({
+      title: "Interface ID",
+      description: "ID of interface to update.",
+      example: crypto.randomUUID(),
+    }),
+  }),
+  updateInterfaceBody: createInsertSchema(interfaces, {
+    name: (schema) =>
+      schema.meta({
+        title: "Interface Name",
+        description: "New name of interface.",
+        example: "GigabitEthernet0/1",
+      }),
+    mac: () =>
+      z.mac().meta({
+        title: "MAC Address",
+        description: "New MAC address of interface.",
+        example: "00:1A:2B:3C:4D:5E",
+      }),
+    ip: () =>
+      z.ipv4().meta({
+        title: "IP Address",
+        description: "New IP address of interface.",
+        example: "192.168.1.1",
+      }),
+  }).omit({ id: true, deviceId: true }),
+  // Delete Interface
+  deleteInterfaceParams: z.object({
+    id: z.uuid().meta({
+      title: "Device ID",
+      description: "ID of device.",
+      example: crypto.randomUUID(),
+    }),
+    interfaceId: z.uuid().meta({
+      title: "Interface ID",
+      description: "ID of interface to delete.",
+      example: crypto.randomUUID(),
+    }),
+  }),
 } as const;
 
 export type DeviceModel = {

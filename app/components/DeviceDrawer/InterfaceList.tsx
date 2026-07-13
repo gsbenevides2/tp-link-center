@@ -1,6 +1,10 @@
-import { VscAddCompact } from "react-icons/vsc";
+import { VscAddCompact, VscEdit, VscTrash } from "react-icons/vsc";
 import { Device } from "../RegisteredDevicesSection/useDevices";
 import { useAddInterfaceModal } from "../AddInterfaceModal";
+import {
+  DeleteInterfaceModal,
+  useDeleteInterfaceModal,
+} from "./DeleteInterfaceModal";
 
 export type Interface = Device["interfaces"][number];
 
@@ -11,6 +15,7 @@ interface Props {
 
 export function InterfaceList({ interfaces, deviceId }: Props) {
   const addInterfaceModal = useAddInterfaceModal();
+  const deleteInterfaceModal = useDeleteInterfaceModal(deviceId);
   const hasInterfaces = interfaces.length > 0;
 
   return (
@@ -32,6 +37,7 @@ export function InterfaceList({ interfaces, deviceId }: Props) {
                 <th>Nome</th>
                 <th>MAC</th>
                 <th>IP</th>
+                <th className="w-24">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -40,6 +46,22 @@ export function InterfaceList({ interfaces, deviceId }: Props) {
                   <td>{iface.name}</td>
                   <td>{iface.mac}</td>
                   <td>{iface.ip}</td>
+                  <td className="w-24">
+                    <div className="flex gap-1">
+                      <button
+                        className="btn btn-sm btn-ghost"
+                        onClick={() => addInterfaceModal?.open(deviceId, iface)}
+                      >
+                        <VscEdit />
+                      </button>
+                      <button
+                        className="btn btn-sm btn-ghost"
+                        onClick={() => deleteInterfaceModal.open(iface)}
+                      >
+                        <VscTrash />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -50,6 +72,7 @@ export function InterfaceList({ interfaces, deviceId }: Props) {
           Nenhuma interface encontrada.
         </p>
       )}
+      <DeleteInterfaceModal {...deleteInterfaceModal.props} />
     </>
   );
 }

@@ -71,31 +71,33 @@ export function RegisteredDevicesSection() {
                 <td>{device.brand}</td>
                 <td>Connectado</td>
                 <td className="w-68">
-                  <button
-                    className="btn btn-sm btn-ghost"
-                    onClick={() => addDeviceModal?.open(device)}
-                  >
-                    <VscEdit />
-                  </button>
-                  <button
-                    className="ml-1 btn btn-sm btn-ghost"
-                    onClick={() => deleteModalState.open(device)}
-                  >
-                    {isPending && variables === device.id ? (
-                      <span className="loading loading-spinner loading-sm"></span>
-                    ) : (
-                      <VscTrash />
-                    )}
-                  </button>
-                  <button
-                    className="ml-1 btn btn-sm btn-ghost"
-                    onClick={() => {
-                      console.log(deviceDrawer);
-                      deviceDrawer?.open(device.id);
-                    }}
-                  >
-                    <VscOpenInWindow />
-                  </button>
+                  <div className="flex gap-1">
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      onClick={() => addDeviceModal?.open(device)}
+                    >
+                      <VscEdit />
+                    </button>
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      onClick={() => deleteModalState.open(device)}
+                    >
+                      {isPending && variables === device.id ? (
+                        <span className="loading loading-spinner loading-sm"></span>
+                      ) : (
+                        <VscTrash />
+                      )}
+                    </button>
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      onClick={() => {
+                        console.log(deviceDrawer);
+                        deviceDrawer?.open(device.id);
+                      }}
+                    >
+                      <VscOpenInWindow />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

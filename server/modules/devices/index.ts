@@ -85,4 +85,32 @@ export const device = new Elysia({
         [StatusMap.Created]: DeviceModel.createInterfaceResponse,
       },
     },
+  )
+  .put(
+    "/:id/interface/:interfaceId",
+    async ({ params, body }) => {
+      await Device.updateInterface(params, body);
+      return status(StatusMap.OK);
+    },
+    {
+      detail: {
+        summary: "Update Interface",
+        description: "Update a network interface of a device.",
+      },
+      params: DeviceModel.updateInterfaceParams,
+      body: DeviceModel.updateInterfaceBody,
+    },
+  )
+  .delete(
+    "/:id/interface/:interfaceId",
+    async ({ params }) => {
+      await Device.deleteInterface(params);
+    },
+    {
+      detail: {
+        summary: "Delete Interface",
+        description: "Delete a network interface from a device.",
+      },
+      params: DeviceModel.deleteInterfaceParams,
+    },
   );
