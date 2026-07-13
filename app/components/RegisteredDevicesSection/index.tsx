@@ -9,7 +9,11 @@ import {
 } from "react-icons/vsc";
 import { ErrorMessage } from "./ErroMessage";
 import { LoadingMessage } from "./LoadingMessage";
-import { useDevicesQuery, useRemoveDevice } from "./useDevices";
+import {
+  useDevicesQuery,
+  useLatestCheckQuery,
+  useRemoveDevice,
+} from "./useDevices";
 import { DeleteModal, useDeleteModal } from "./DeleteModal";
 import { EmptyMessage } from "./EmptyMessage";
 import { useAddDeviceModal } from "../AddDeviceModal";
@@ -23,11 +27,22 @@ export function RegisteredDevicesSection() {
     isRefetching,
     refetch,
   } = useDevicesQuery();
+  const { data: latestCheck } = useLatestCheckQuery();
   const { mutate: removeDevice, isPending, variables } = useRemoveDevice();
   const addDeviceModal = useAddDeviceModal();
   const deleteModalState = useDeleteModal((id) => removeDevice(id));
   const deviceDrawer = useDeviceDrawer();
   const isEmpty = !isLoading && !isRefetching && devices?.length === 0;
+
+  const onlineMacs = new Set(
+    latestCheck?.devices.map((d) => d.mac.toLowerCase()) ?? [],
+  );
+
+  function isDeviceOnline(device: NonNullable<typeof devices>[number]) {
+    return device.interfaces.some((iface) =>
+      onlineMacs.has(iface.mac.toLowerCase()),
+    );
+  }
 
   return (
     <section>
@@ -64,42 +79,55 @@ export function RegisteredDevicesSection() {
             {isLoading ? <LoadingMessage /> : null}
             {error ? <ErrorMessage /> : null}
             {isEmpty ? <EmptyMessage /> : null}
-            {devices?.map((device) => (
-              <tr key={device.id}>
-                <th className="w-94">{device.id}</th>
-                <td>{device.name}</td>
-                <td>{device.brand}</td>
-                <td>Connectado</td>
-                <td className="w-68">
-                  <div className="flex gap-1">
-                    <button
-                      className="btn btn-sm btn-ghost"
-                      onClick={() => addDeviceModal?.open(device)}
-                    >
-                      <VscEdit />
-                    </button>
-                    <button
-                      className="btn btn-sm btn-ghost"
-                      onClick={() => deleteModalState.open(device)}
-                    >
-                      {isPending && variables === device.id ? (
-                        <span className="loading loading-spinner loading-sm"></span>
-                      ) : (
-                        <VscTrash />
-                      )}
-                    </button>
-                    <button
-                      className="btn btn-sm btn-ghost"
-                      onClick={() => {
-                        deviceDrawer?.open(device.id);
-                      }}
-                    >
-                      <VscOpenInWindow />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {devices?.map((device) => {
+              const online = isDeviceOnline(device);
+              return (
+                <tr key={device.id}>
+                  <th className="w-94">{device.id}</th>
+                  <td>{device.name}</td>
+                  <td>{device.brand}</td>
+                  <td>
+                    {online ? (
+                      <span className="badge badge-success badge-sm">
+                        Conectado
+                      </span>
+                    ) : (
+                      <span className="badge badge-error badge-sm">
+                        Desconectado
+                      </span>
+                    )}
+                  </td>
+                  <td className="w-68">
+                    <div className="flex gap-1">
+                      <button
+                        className="btn btn-sm btn-ghost"
+                        onClick={() => addDeviceModal?.open(device)}
+                      >
+                        <VscEdit />
+                      </button>
+                      <button
+                        className="btn btn-sm btn-ghost"
+                        onClick={() => deleteModalState.open(device)}
+                      >
+                        {isPending && variables === device.id ? (
+                          <span className="loading loading-spinner loading-sm"></span>
+                        ) : (
+                          <VscTrash />
+                        )}
+                      </button>
+                      <button
+                        className="btn btn-sm btn-ghost"
+                        onClick={() => {
+                          deviceDrawer?.open(device.id);
+                        }}
+                      >
+                        <VscOpenInWindow />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

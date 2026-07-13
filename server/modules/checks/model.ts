@@ -41,6 +41,18 @@ export const CheckModel = {
                 description: "IP address of the connected device.",
                 example: "192.168.1.100",
               }),
+            vendor: () =>
+              z.string().meta({
+                title: "Vendor",
+                description: "Vendor name resolved from MAC OUI.",
+                example: "TP-Link",
+              }),
+            name: () =>
+              z.string().meta({
+                title: "Name",
+                description: "Device name from DB or router.",
+                example: "Meu-PC",
+              }),
             checkId: () =>
               z.uuid().meta({
                 title: "Check ID",

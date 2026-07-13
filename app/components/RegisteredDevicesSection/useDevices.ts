@@ -9,12 +9,29 @@ export type GetDeviceFuncReturn = NonNullable<
 export type Device = GetDeviceFuncReturn[number];
 
 export const DEVICES_KEY = "devices" as const;
+export const CHECKS_KEY = "checks" as const;
 
 export function useDevicesQuery() {
   return useQuery({
     queryKey: [DEVICES_KEY],
     queryFn: async (): Promise<GetDeviceFuncReturn> => {
       const response = await clientSideApi.devices.get();
+      if (response.error) throw response.error;
+      return response.data;
+    },
+  });
+}
+
+type GetCheckFunc = (typeof clientSideApi)["checks"]["latest"]["get"];
+export type GetCheckFuncReturn = NonNullable<
+  Awaited<ReturnType<GetCheckFunc>>["data"]
+>;
+
+export function useLatestCheckQuery() {
+  return useQuery({
+    queryKey: [CHECKS_KEY, "latest"],
+    queryFn: async (): Promise<GetCheckFuncReturn> => {
+      const response = await clientSideApi.checks.latest.get();
       if (response.error) throw response.error;
       return response.data;
     },
@@ -41,7 +58,9 @@ export function useAddDevice() {
 
   return useMutation({
     mutationFn: async (params: AddDeviceParams) => {
-      await clientSideApi.devices.post(params);
+      const response = await clientSideApi.devices.post(params);
+      if (response.error) throw response.error;
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [DEVICES_KEY] });

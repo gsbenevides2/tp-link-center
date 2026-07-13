@@ -21,6 +21,8 @@ export async function performOnlineCheck() {
           mac: d.mac,
           ip: d.ip,
           checkId,
+          name: d.name,
+          vendor: d.vendor,
         })),
       );
     }

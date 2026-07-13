@@ -24,6 +24,8 @@ export abstract class Check {
         id: d.id,
         mac: d.mac,
         ip: d.ip,
+        vendor: d.vendor,
+        name: d.name,
         checkId: d.checkId,
       })),
     };

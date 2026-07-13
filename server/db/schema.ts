@@ -36,6 +36,8 @@ export const onlineDevicesChecks = sqliteTable("onlineDeviceChecks", {
     .$defaultFn(() => crypto.randomUUID()),
   mac: text().notNull(),
   ip: text().notNull(),
+  vendor: text().notNull(),
+  name: text().notNull(),
   checkId: text().notNull(),
 });
 
