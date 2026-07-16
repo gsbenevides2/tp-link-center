@@ -72,6 +72,31 @@ type SimpleStats = {
   router_panel: { title: string; items: { title: string; value: string }[] }[];
 };
 
+interface DMParam {
+  oid: string;
+  data: unknown;
+  callback: {
+    success: (data: never) => void;
+  };
+}
+interface FakeJQuery {
+  dm: {
+    add: (p: DMParam) => void;
+    del: (p: DMParam) => void;
+    getList: (p: DMParam) => void;
+  };
+}
+
+declare global {
+  interface Window {
+    getMac: () => Promise<string>;
+    getIp: () => Promise<string>;
+    getStackId: () => Promise<string>;
+  }
+
+  var $: FakeJQuery;
+}
+
 export abstract class Router {
   private static accessToken: string | null = null;
   private static accessTokenExp: number | null = null;
@@ -266,5 +291,86 @@ export abstract class Router {
       this.vendorCache.set(oui, getVendor(mac) ?? "Unknown");
     }
     return this.vendorCache.get(oui)!;
+  }
+
+  // DHCP Manipulation
+  static async addDHCPEntry(mac: string, ip: string) {
+    const page = await this.prepareEnviroment();
+    await page.exposeFunction("getMac", () => mac);
+    await page.exposeFunction("getIp", () => ip);
+    const stackId = await page.evaluate(() => {
+      return new Promise<string>(async (resolve) => {
+        $.dm.add({
+          oid: "DEV2_DHCPV4_POOL_STATICADDR",
+          data: {
+            chaddr: await window.getMac(),
+            yiaddr: await window.getIp(),
+            enable: "1",
+            pstack: "1,0,0,0,0,0",
+          },
+          callback: {
+            success: (data: { stack: string }) => {
+              resolve(data.stack);
+            },
+          },
+        });
+      });
+    });
+    return stackId;
+  }
+
+  static async removeDHCPEntry(id: string) {
+    const page = await this.prepareEnviroment();
+    await page.exposeFunction("getStackId", () => id);
+    await page.evaluate(() => {
+      return new Promise<void>(async (resolve) => {
+        $.dm.del({
+          oid: "DEV2_DHCPV4_POOL_STATICADDR",
+          data: {
+            stack: await window.getStackId(),
+          },
+          callback: {
+            success: () => {
+              resolve();
+            },
+          },
+        });
+      });
+    });
+  }
+
+  static async listDHCPEntry() {
+    const page = await this.prepareEnviroment();
+    return await page.evaluate(() => {
+      return new Promise<
+        Array<{
+          ip: string;
+          mac: string;
+          entryId: string;
+        }>
+      >(async (resolve) => {
+        $.dm.getList({
+          oid: "DEV2_DHCPV4_POOL_STATICADDR",
+          data: {},
+          callback: {
+            success: (
+              res: Array<{
+                yiaddr: string;
+                chaddr: string;
+                stack: string;
+              }>,
+            ) => {
+              resolve(
+                res.map((e) => ({
+                  ip: e.yiaddr,
+                  mac: e.chaddr,
+                  entryId: e.stack,
+                })),
+              );
+            },
+          },
+        });
+      });
+    });
   }
 }
