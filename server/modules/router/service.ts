@@ -1,288 +1,54 @@
-import { getAccessToken } from "@/server/utils/authentik";
-import puppeteer, { Browser, Page } from "puppeteer-core";
-import { getVendor } from "mac-oui-lookup";
+import { unknown } from "zod";
 import { RouterModel } from "./model";
+import getVendor from "mac-oui-lookup";
 import { Device } from "../devices/service";
-import { StatusMap } from "elysia";
 
-const {
-  ROUTER_ENPOINT,
-  ROUTER_PASSWORD,
-  AUTHENTIK_CLOAKBROWSER_CLIENT_ID,
-  CLOAKBROWSER_PROFILE_ID,
-  CLOAKBROWSER_ENDPOINT,
-} = process.env;
+const { ROUTER_PASSWORD, ROUTER_ENPOINT } = process.env;
 
-if (!ROUTER_ENPOINT) throw new Error("Missing ROUTER_ENPOINT");
+type ConnectedDevices = RouterModel["getConnectedDevicesResponse"];
+type DhcpEntries = RouterModel["listDHCPEntryResponse"];
+
 if (!ROUTER_PASSWORD) throw new Error("Missing ROUTER_PASSWORD");
-if (!AUTHENTIK_CLOAKBROWSER_CLIENT_ID)
-  throw new Error("Missing AUTHENTIK_CLOAKBROWSER_CLIENT_ID");
+if (!ROUTER_ENPOINT) throw new Error("Missing ROUTER_ENPOINT");
 
-if (!CLOAKBROWSER_PROFILE_ID)
-  throw new Error("Missing CLOAKBROWSER_PROFILE_ID");
-if (!CLOAKBROWSER_ENDPOINT) throw new Error("Missing CLOAKBROWSER_ENDPOINT");
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const CONNECTION_TEST_MAP: Record<string, string> = {
-  Cabeado: "Conexão Cabeada",
-  "--": "Roteador",
-};
-
-function mapConnectionTest(value: string): string {
-  if (value in CONNECTION_TEST_MAP) {
-    return CONNECTION_TEST_MAP[value];
-  }
-  const wifiMatch = value.match(/^(\d+(?:\.\d+)?)GHz_CH(\d+)$/);
-  if (wifiMatch) {
-    return `Wifi ${wifiMatch[1]} GHz no Canal ${wifiMatch[2]}`;
-  }
-  return value;
-}
-
-type EasyMeshCols = readonly [
-  "ID",
-  "Nome do Dispositivo",
-  "Endereço IP",
-  "Endereço MAC",
-  "Teste de Conexão",
-  "Força de Sinal",
-  "Link Rate",
-  "Operação",
-];
-type WiredRe0StatCols = readonly [
-  "ID",
-  "Nome",
-  "Endereço IP",
-  "Endereço MAC",
-  "Teste de Conexão",
-  "Link Rate",
-  "Attached To",
-];
-type LanStatTable = readonly [
-  "Porta LAN",
-  "Status",
-  "Velocidade de Negociação",
-];
-
-type SimpleStats = {
-  tableEasymeshStat: Record<EasyMeshCols[number], string>[];
-  tableWiredRe0Stat: Record<WiredRe0StatCols[number], string>[];
-  tableWlRe0Stat: Record<WiredRe0StatCols[number], string>[];
-  tableLanStat: Record<LanStatTable[number], string>[];
-  map_grid_internet: { label: string; value: string }[];
-  router_panel: { title: string; items: { title: string; value: string }[] }[];
-};
-
-interface DMParam {
-  oid: string;
-  data: unknown;
-  callback: {
-    success: (data: never) => void;
-  };
-}
-interface FakeJQuery {
-  dm: {
-    add: (p: DMParam) => void;
-    del: (p: DMParam) => void;
-    getList: (p: DMParam) => void;
-  };
-}
-
-declare global {
-  interface Window {
-    getMac: () => Promise<string>;
-    getIp: () => Promise<string>;
-    getStackId: () => Promise<string>;
-  }
-
-  var $: FakeJQuery;
-}
-
-export abstract class Router {
-  private static accessToken: string | null = null;
-  private static accessTokenExp: number | null = null;
-  private static browser: Browser | null = null;
+export class Router {
+  static processQueue: string[] = [];
   private static vendorCache = new Map<string, string>();
 
-  private static async ensureToken() {
-    const isExpired = this.accessTokenExp
-      ? Date.now() >= this.accessTokenExp * 1000
-      : true;
-    if (!isExpired) return;
-    const { token, exp } = await getAccessToken(
-      AUTHENTIK_CLOAKBROWSER_CLIENT_ID!,
-    );
-    this.accessToken = token;
-    this.accessTokenExp = exp;
-  }
-
-  private static async ensureSession() {
-    await this.ensureToken();
-    await this.ensureCloakSession();
-    return await this.getBrowserInstance();
-  }
-
-  private static async getBrowserInstance() {
-    if (this.browser) return await this.browser.newPage();
-    const url = new URL(
-      `/api/profiles/${CLOAKBROWSER_PROFILE_ID}/cdp`,
-      CLOAKBROWSER_ENDPOINT,
-    );
-    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    const browser = await puppeteer.connect({
-      browserWSEndpoint: url.toString(),
-      headers: { Authorization: "Bearer " + this.accessToken },
-    });
-    browser.on("disconnected", () => {
-      this.browser = null;
-    });
-    const page = await browser.newPage();
-    return page;
-  }
-
-  private static async prepareEnviroment() {
-    const page = await this.ensureSession();
-    await this.login(page);
-    return page;
-  }
-
-  private static async ensureCloakSession() {
-    const url = new URL(
-      `/api/profiles/${CLOAKBROWSER_PROFILE_ID}/launch`,
-      CLOAKBROWSER_ENDPOINT,
-    );
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { Authorization: "Bearer " + this.accessToken },
-    });
-    if (response.status === StatusMap.Conflict) return;
-    if (!response.ok) {
-      console.error(response);
-      throw new Error("Browser not started");
+  private static async waitRelease() {
+    const processId = crypto.randomUUID();
+    this.processQueue.push(processId);
+    while (true) {
+      if (this.processQueue.at(0) === processId) break;
+      await wait(100);
     }
   }
 
-  private static async login(page: Page) {
-    await page.goto(ROUTER_ENPOINT!);
-    const cookie = (await page.browser().cookies()).find(
-      (cookie) => cookie.name === "JSESSIONID",
-    );
-    if (cookie) return page.waitForNetworkIdle({ idleTime: 500 });
-    await page.type("#pc-login-password", ROUTER_PASSWORD!);
+  private static async release() {
+    this.processQueue.shift();
+  }
+
+  private static async login(page: Bun.WebView) {
+    await page.navigate(ROUTER_ENPOINT!);
+    await page.click("#pc-login-password");
+    await page.type(ROUTER_PASSWORD!);
     await page.click("#pc-login-btn");
-    await page.waitForNetworkIdle({ idleTime: 500 });
-    const overrideSession = await page.evaluate(() => {
-      return document
-        .querySelector("#alert-container")
-        ?.computedStyleMap()
-        ?.get("display")
-        ?.toString();
-    });
-    if (overrideSession === "block") {
-      await page.click("#confirm-yes");
-      await page.waitForNetworkIdle({ idleTime: 500 });
+
+    while (true) {
+      await wait(100);
+      const isForcing = await page
+        .evaluate<boolean>(`$("#confirm-yes").is(":visible")`)
+        .catch(() => false);
+      if (isForcing) {
+        await page.click("#confirm-yes");
+      }
+      const isLogged = await page
+        .evaluate<boolean>(`$("#topReboot").is(":visible")`)
+        .catch(() => false);
+      if (isLogged) break;
     }
-  }
-
-  static async getSimpleStats(): Promise<SimpleStats> {
-    const page = await this.prepareEnviroment();
-
-    return page.evaluate(() => {
-      function getTable(selector: string) {
-        const table = document.querySelector(selector);
-        if (!table) return [];
-
-        const headers = [
-          ...table.querySelectorAll(
-            "thead th, tr:first-child th, tr:first-child td",
-          ),
-        ].map((th) => th.textContent?.trim() ?? "");
-
-        const rowsInTbody = table.querySelectorAll("tbody tr");
-        const bodyRows = rowsInTbody.length
-          ? [...rowsInTbody]
-          : [...table.querySelectorAll("tr")].slice(1);
-
-        return bodyRows.map((tr) => {
-          const row: Record<string, string> = {};
-          [...tr.querySelectorAll("td")].forEach((td, i) => {
-            row[headers[i]] =
-              td.textContent?.trim() ||
-              (td.querySelector("input") as HTMLInputElement)?.value ||
-              "";
-          });
-          return row;
-        });
-      }
-
-      function getMapGrid(selector: string) {
-        const grid = document.querySelector(selector);
-        if (!grid) return [];
-        return [...(grid.children[0]?.children ?? [])]
-          .filter((el) => !el.classList.contains("nd"))
-          .map((el) => ({
-            label: el.querySelector("label")?.textContent ?? "",
-            value: (el.querySelector("input") as HTMLInputElement)?.value ?? "",
-          }));
-      }
-
-      function getMapPanel(selector: string) {
-        const panel = document.querySelector(selector);
-        if (!panel) return [];
-        return [...panel.querySelectorAll(".content")].map((c) => ({
-          title: c.querySelector("h5")?.textContent ?? "",
-          items: [...c.querySelectorAll(".pure-control-group")].map((i) => ({
-            title: i.querySelector("label")?.textContent ?? "",
-            value: (i.querySelector("input") as HTMLInputElement)?.value ?? "",
-          })),
-        }));
-      }
-
-      return {
-        tableEasymeshStat: getTable("#tableEasymeshStat"),
-        tableWiredRe0Stat: getTable("#tableWiredRe0Stat"),
-        tableWlRe0Stat: getTable("#tableWlRe0Stat"),
-        tableLanStat: getTable("#tableLanStat"),
-        map_grid_internet: getMapGrid("#map_grid_internet"),
-        router_panel: getMapPanel("#router_panel"),
-      };
-    }) as Promise<SimpleStats>;
-  }
-
-  static async getConnectedDevices(): Promise<
-    RouterModel["getConnectedDevicesResponse"]
-  > {
-    const simpleStats = await this.getSimpleStats();
-
-    const rows = [
-      ...simpleStats.tableEasymeshStat.map((x) => ({
-        mac: x["Endereço MAC"],
-        ip: x["Endereço IP"],
-        name: x["Nome do Dispositivo"],
-        routerInterface: mapConnectionTest(x["Teste de Conexão"]),
-      })),
-      ...simpleStats.tableWiredRe0Stat.map((x) => ({
-        mac: x["Endereço MAC"],
-        ip: x["Endereço IP"],
-        name: x["Nome"],
-        routerInterface: mapConnectionTest(x["Teste de Conexão"]),
-      })),
-      ...simpleStats.tableWlRe0Stat.map((x) => ({
-        mac: x["Endereço MAC"],
-        ip: x["Endereço IP"],
-        name: x["Nome"],
-        routerInterface: mapConnectionTest(x["Teste de Conexão"]),
-      })),
-    ];
-
-    return Promise.all(
-      rows.map(async (row) => ({
-        mac: row.mac,
-        ip: row.ip,
-        vendor: this.getVendorCached(row.mac),
-        name: (await Device.getDeviceNameOfMac(row.mac)) ?? row.name ?? "",
-        routerInterface: row.routerInterface,
-      })),
-    );
   }
 
   private static getVendorCached(mac: string): string {
@@ -293,84 +59,399 @@ export abstract class Router {
     return this.vendorCache.get(oui)!;
   }
 
-  // DHCP Manipulation
-  static async addDHCPEntry(mac: string, ip: string) {
-    const page = await this.prepareEnviroment();
-    await page.exposeFunction("getMac", () => mac);
-    await page.exposeFunction("getIp", () => ip);
-    const stackId = await page.evaluate(() => {
-      return new Promise<string>(async (resolve) => {
-        $.dm.add({
-          oid: "DEV2_DHCPV4_POOL_STATICADDR",
-          data: {
-            chaddr: await window.getMac(),
-            yiaddr: await window.getIp(),
-            enable: "1",
-            pstack: "1,0,0,0,0,0",
-          },
-          callback: {
-            success: (data: { stack: string }) => {
-              resolve(data.stack);
-            },
-          },
-        });
-      });
-    });
-    return stackId;
+  private static async getConnectedEasyMeshDevices(
+    page: Bun.WebView,
+  ): Promise<ConnectedDevices> {
+    const DEV2_WIFI_APDEV = await page.evaluate<
+      Array<{
+        MACAddress: string;
+        X_TP_IPAddress: string;
+        backhaulLinkType: string;
+        X_TP_HostName: string;
+      }>
+    >(`(function routers(){
+        return new Promise(resolve=>{
+            $.dm.getList({
+                oid: "DEV2_WIFI_APDEV",
+                data: {},
+                callback: {
+                    success: (data)=>resolve(data)
+                }
+            })
+            })
+        })()`);
+
+    function processBackLinkType(type: string) {
+      if (type === "Ethernet") {
+        return "Cabeada";
+      } else if (type === "") {
+        return "Roteador";
+      } else {
+        return "Unknown";
+      }
+    }
+    return await Promise.all(
+      DEV2_WIFI_APDEV.map(async (item) => ({
+        ip: item.X_TP_IPAddress,
+        mac: item.MACAddress,
+        name:
+          (await Device.getDeviceNameOfMac(item.MACAddress)) ||
+          item.X_TP_HostName ||
+          "Unknown",
+        routerInterface: processBackLinkType(item.backhaulLinkType),
+        vendor: this.getVendorCached(item.MACAddress),
+      })),
+    );
   }
 
-  static async removeDHCPEntry(id: string) {
-    const page = await this.prepareEnviroment();
-    await page.exposeFunction("getStackId", () => id);
-    await page.evaluate(() => {
-      return new Promise<void>(async (resolve) => {
-        $.dm.del({
-          oid: "DEV2_DHCPV4_POOL_STATICADDR",
-          data: {
-            stack: await window.getStackId(),
-          },
-          callback: {
-            success: () => {
-              resolve();
-            },
-          },
-        });
-      });
-    });
+  private static async getConnectedWifiDevices(
+    page: Bun.WebView,
+  ): Promise<ConnectedDevices> {
+    const DEV2_WIFI_APDEV_ASSOCDEV = await page.evaluate<
+      Array<{
+        X_TP_HostName: string;
+        X_TP_RadioMac: string;
+        X_TP_IPAddress: string;
+        MACAddress: string;
+      }>
+    >(`(function routers(){
+        return new Promise(resolve=>{
+            $.dm.getList({
+                oid: "DEV2_WIFI_APDEV_ASSOCDEV",
+                data: {},
+                callback: {
+                    success: (data)=>resolve(data)
+                }
+            })
+            })
+        })()`);
+    const DEV2_WIFI_APDEV_RADIO = await page.evaluate<
+      Array<{
+        channel: string;
+        operatingFrequencyBand: string;
+        MACAddress: string;
+      }>
+    >(`(function routers(){
+        return new Promise(resolve=>{
+            $.dm.getList({
+                oid: "DEV2_WIFI_APDEV_RADIO",
+                data: {},
+                callback: {
+                    success: (data)=>resolve(data)
+                }
+            })
+            })
+        })()`);
+    function getRouterInterface(radioMac: string) {
+      const data = DEV2_WIFI_APDEV_RADIO.find(
+        (item) => item.MACAddress === radioMac,
+      );
+      if (!data) return "Unknown";
+      return `Wifi ${data.operatingFrequencyBand} GHz no Canal ${data.channel}`;
+    }
+
+    return await Promise.all(
+      DEV2_WIFI_APDEV_ASSOCDEV.map(async (item) => ({
+        ip: item.X_TP_IPAddress,
+        mac: item.MACAddress,
+        name:
+          (await Device.getDeviceNameOfMac(item.MACAddress)) ||
+          item.X_TP_HostName ||
+          "Unknown",
+        vendor: this.getVendorCached(item.MACAddress),
+        routerInterface: getRouterInterface(item.X_TP_RadioMac),
+      })),
+    );
   }
 
-  static async listDHCPEntry() {
-    const page = await this.prepareEnviroment();
-    return await page.evaluate(() => {
-      return new Promise<
+  private static async getConnectedWiredDevices(
+    page: Bun.WebView,
+  ): Promise<ConnectedDevices> {
+    const DEV2_WIFI_APDEV_ETHASSOCDEV = await page.evaluate<
+      Array<{
+        IPAddress: string;
+        X_TP_HostName: string;
+        MACAddress: string;
+      }>
+    >(`(function routers(){
+        return new Promise(resolve=>{
+            $.dm.getList({
+                oid: "DEV2_WIFI_APDEV_ETHASSOCDEV",
+                data: {},
+                callback: {
+                    success: (data)=>resolve(data)
+                }
+            })
+            })
+        })()`);
+
+    return await Promise.all(
+      DEV2_WIFI_APDEV_ETHASSOCDEV.map(async (i) => ({
+        ip: i.IPAddress,
+        mac: i.MACAddress,
+        name:
+          (await Device.getDeviceNameOfMac(i.MACAddress)) ||
+          i.X_TP_HostName ||
+          "Unknown",
+        routerInterface: "Cabeada",
+        vendor: this.getVendorCached(i.MACAddress),
+      })),
+    );
+  }
+
+  static async getConnectedDevices(): Promise<ConnectedDevices> {
+    await this.waitRelease();
+    try {
+      await using page = new Bun.WebView();
+      await this.login(page);
+
+      const results = await this.getConnectedEasyMeshDevices(page);
+      results.push(...(await this.getConnectedWifiDevices(page)));
+      results.push(...(await this.getConnectedWiredDevices(page)));
+
+      page.close();
+      return results;
+    } finally {
+      await this.release();
+    }
+  }
+
+  static async listDHCPEntry(): Promise<DhcpEntries> {
+    await this.waitRelease();
+    try {
+      await using page = new Bun.WebView();
+      await this.login(page);
+
+      const DEV2_DHCPV4_POOL_STATICADDR = await page.evaluate<
         Array<{
-          ip: string;
-          mac: string;
-          entryId: string;
+          yiaddr: string;
+          chaddr: string;
+          stack: string;
         }>
-      >(async (resolve) => {
-        $.dm.getList({
-          oid: "DEV2_DHCPV4_POOL_STATICADDR",
-          data: {},
-          callback: {
-            success: (
-              res: Array<{
-                yiaddr: string;
-                chaddr: string;
-                stack: string;
-              }>,
-            ) => {
-              resolve(
-                res.map((e) => ({
-                  ip: e.yiaddr,
-                  mac: e.chaddr,
-                  entryId: e.stack,
-                })),
-              );
-            },
-          },
-        });
-      });
-    });
+      >(`(function routers(){
+        return new Promise(resolve=>{
+            $.dm.getList({
+                oid: "DEV2_DHCPV4_POOL_STATICADDR",
+                data: {},
+                callback: {
+                    success: (data)=>resolve(data)
+                }
+            })
+            })
+        })()`);
+
+      return DEV2_DHCPV4_POOL_STATICADDR.map((e) => ({
+        ip: e.yiaddr,
+        mac: e.chaddr,
+        entryId: e.stack,
+      }));
+    } finally {
+      await this.release();
+    }
+  }
+
+  static async addDHCPEntry(mac: string, ip: string): Promise<string> {
+    await this.waitRelease();
+    try {
+      await using page = new Bun.WebView();
+      await this.login(page);
+
+      const DEV2_DHCPV4_POOL_STATICADDR = await page.evaluate<{
+        stack: string;
+      }>(`(function routers(){
+        return new Promise(resolve=>{
+            $.dm.add({
+                oid: "DEV2_DHCPV4_POOL_STATICADDR",
+                data: {
+                    chaddr: "${mac}",
+                    yiaddr: "${ip}",
+                    enable: "1",
+                    pstack: "1,0,0,0,0,0"
+                },
+                callback: {
+                    success: (data)=>resolve(data)
+                }
+            })
+            })
+        })()`);
+
+      return DEV2_DHCPV4_POOL_STATICADDR.stack;
+    } finally {
+      await this.release();
+    }
+  }
+  static async removeDHCPEntry(id: string) {
+    await this.waitRelease();
+    try {
+      await using page = new Bun.WebView();
+      await this.login(page);
+      await page.evaluate<void>(`(function routers(){
+        return new Promise(resolve=>{
+            $.dm.del({
+                oid: "DEV2_DHCPV4_POOL_STATICADDR",
+                data: {
+                    stack: "${id}"
+                },
+                callback: {
+                    success: ()=>resolve()
+                }
+            })
+            })
+        })()`);
+    } finally {
+      await this.release();
+    }
+  }
+
+  static async listFirewallChains() {
+    await this.waitRelease();
+    try {
+      await using page = new Bun.WebView();
+      await this.login(page);
+
+      const chains = await page.evaluate<
+        Array<{
+          name: string;
+          enable: string;
+          ruleNumberOfEntries: string;
+          stack: string;
+        }>
+      >(`(function routers(){
+        return new Promise((resolve, reject)=>{
+            $.dm.getList({
+                oid: "DEV2_FW_CHAIN",
+                data: {},
+                callback: {
+                    success: (data)=>resolve(data),
+                    fail: (error)=>reject(error),
+                    error: (error)=>reject(error)
+                }
+            })
+            })
+        })()`);
+
+      return chains.map((c) => ({
+        name: c.name,
+        enable: c.enable,
+        ruleNumberOfEntries: c.ruleNumberOfEntries,
+        stack: c.stack,
+      }));
+    } finally {
+      await this.release();
+    }
+  }
+
+  static async listFirewallRules(chainStack: string) {
+    await this.waitRelease();
+    try {
+      await using page = new Bun.WebView();
+      await this.login(page);
+
+      const rules = await page.evaluate<
+        Array<{
+          ruleName: string;
+          ruleType: string;
+          sourceType: string;
+          sourceIP: string;
+          sourceMAC: string;
+          target: string;
+          enable: string;
+          stack: string;
+        }>
+      >(`(function routers(){
+        return new Promise((resolve, reject)=>{
+            $.dm.getList({
+                oid: "DEV2_FW_CHAIN_RULE",
+                data: { pstack: "${chainStack}" },
+                callback: {
+                    success: (res)=>resolve(res.map((r)=>({
+                        ruleName: r.X_TP_RuleName,
+                        ruleType: r.X_TP_RuleType,
+                        sourceType: r.X_TP_SourceType,
+                        sourceIP: r.sourceIP,
+                        sourceMAC: r.X_TP_SourceMACAddress,
+                        target: r.target,
+                        enable: r.enable,
+                        stack: r.stack
+                    }))),
+                    fail: (error)=>reject(error),
+                    error: (error)=>reject(error)
+                }
+            })
+            })
+        })()`);
+
+      return rules;
+    } finally {
+      await this.release();
+    }
+  }
+
+  static async addFirewallRule(params: {
+    chainStack: string;
+    name: string;
+    sourceMAC: string;
+    sourceIP?: string;
+    target?: string;
+  }) {
+    await this.waitRelease();
+    try {
+      await using page = new Bun.WebView();
+      await this.login(page);
+
+      const result = await page.evaluate<{
+        stack: string;
+      }>(`(function routers(){
+        return new Promise((resolve, reject)=>{
+            $.dm.add({
+                oid: "DEV2_FW_CHAIN_RULE",
+                data: {
+                    enable: 1,
+                    X_TP_RuleType: 2,
+                    X_TP_RuleName: "${params.name}",
+                    X_TP_SourceType: 2,
+                    sourceIP: "${params.sourceIP ?? ""}",
+                    X_TP_SourceMACAddress: "${params.sourceMAC}",
+                    pstack: "${params.chainStack}",
+                    target: "${params.target ?? "Drop"}"
+                },
+                callback: {
+                    success: (data)=>resolve(data),
+                    fail: (error)=>reject(error),
+                    error: (error)=>reject(error)
+                }
+            })
+            })
+        })()`);
+
+      return result.stack;
+    } finally {
+      await this.release();
+    }
+  }
+
+  static async removeFirewallRule(ruleStack: string) {
+    await this.waitRelease();
+    try {
+      await using page = new Bun.WebView();
+      await this.login(page);
+      await page.evaluate<void>(`(function routers(){
+        return new Promise((resolve, reject)=>{
+            $.dm.del({
+                oid: "DEV2_FW_CHAIN_RULE",
+                data: {
+                    stack: "${ruleStack}"
+                },
+                callback: {
+                    success: ()=>resolve(),
+                    fail: (error)=>reject(error),
+                    error: (error)=>reject(error)
+                }
+            })
+            })
+        })()`);
+    } finally {
+      await this.release();
+    }
   }
 }

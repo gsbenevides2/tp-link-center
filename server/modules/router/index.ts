@@ -1,7 +1,7 @@
 import { Elysia, status, StatusMap } from "elysia";
 import z from "zod";
-import { Router } from "@/server/modules/router/service";
 import { RouterModel } from "./model";
+import { Router } from "./service";
 
 export const router = new Elysia({
   prefix: "/router",
@@ -66,7 +66,7 @@ export const router = new Elysia({
     "/dhcp/:id",
     async ({ params }) => {
       await Router.removeDHCPEntry(params.id);
-      return status(StatusMap.NoContent);
+      return status(StatusMap["No Content"]);
     },
     {
       detail: {
@@ -80,7 +80,86 @@ export const router = new Elysia({
         }),
       }),
       response: {
-        [StatusMap.NoContent]: z.void(),
+        [StatusMap["No Content"]]: z.void(),
+      },
+    },
+  )
+  .get(
+    "/firewall/chains",
+    async () => {
+      return status(StatusMap.OK, await Router.listFirewallChains());
+    },
+    {
+      detail: {
+        summary: "List Firewall Chains",
+        description: "List all firewall chains on the router.",
+      },
+      response: {
+        [StatusMap.OK]: RouterModel.firewallChainResponse,
+      },
+    },
+  )
+  .get(
+    "/firewall/rules/:chainStack",
+    async ({ params }) => {
+      return status(
+        StatusMap.OK,
+        await Router.listFirewallRules(params.chainStack),
+      );
+    },
+    {
+      detail: {
+        summary: "List Firewall Rules",
+        description: "List all rules in a specific firewall chain.",
+      },
+      params: z.object({
+        chainStack: z.string().meta({
+          title: "Chain Stack ID",
+          description: "Stack ID of the chain to list rules from.",
+        }),
+      }),
+      response: {
+        [StatusMap.OK]: RouterModel.firewallRuleResponse,
+      },
+    },
+  )
+  .post(
+    "/firewall/rules",
+    async ({ body }) => {
+      const stack = await Router.addFirewallRule(body);
+      return status(StatusMap.OK, { stack });
+    },
+    {
+      detail: {
+        summary: "Add Firewall Rule",
+        description:
+          "Add a new firewall rule to block or reject traffic by MAC/IP.",
+      },
+      body: RouterModel.addFirewallRuleRequest,
+      response: {
+        [StatusMap.OK]: RouterModel.firewallRuleCreatedResponse,
+      },
+    },
+  )
+  .delete(
+    "/firewall/rules/:id",
+    async ({ params }) => {
+      await Router.removeFirewallRule(params.id);
+      return status(StatusMap["No Content"]);
+    },
+    {
+      detail: {
+        summary: "Remove Firewall Rule",
+        description: "Remove a firewall rule by its stack ID.",
+      },
+      params: z.object({
+        id: z.string().meta({
+          title: "Rule Stack ID",
+          description: "Stack ID of the firewall rule to remove.",
+        }),
+      }),
+      response: {
+        [StatusMap["No Content"]]: z.void(),
       },
     },
   );

@@ -18,8 +18,6 @@ Admin dashboard to manage TP-Link routers, monitor connected devices, and track 
 - **Backend:** Elysia (API framework, proxied via Next.js catch-all route)
 - **Database:** PostgreSQL + Drizzle ORM
 - **API Client:** Elysia Eden (type-safe)
-- **Browser Automation:** Puppeteer-core + CloakBrowser (remote browser)
-- **Auth:** Authentik (OAuth2 client_credentials)
 
 ## Getting Started
 
@@ -28,23 +26,16 @@ Admin dashboard to manage TP-Link routers, monitor connected devices, and track 
 - Bun
 - PostgreSQL
 - TP-Link router with web admin interface
-- Authentik instance + CloakBrowser service (for remote browser scraping)
 
 ### Environment Variables
 
-Copy `.env.example` to `.env` and fill in:
+Create `.env` and fill in:
 
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_URL` | PostgreSQL connection string |
 | `ROUTER_ENPOINT` | TP-Link router web admin URL |
 | `ROUTER_PASSWORD` | TP-Link router login password |
-| `AUTHENTIK_ENDPOINT` | Authentik server URL |
-| `AUTHENTIK_USER` | Authentik service account username |
-| `AUTHENTIK_PASSWORD` | Authentik service account password |
-| `AUTHENTIK_CLOAKBROWSER_CLIENT_ID` | Authentik OAuth2 client ID for CloakBrowser |
-| `CLOAKBROWSER_ENDPOINT` | CloakBrowser service URL |
-| `CLOAKBROWSER_PROFILE_ID` | CloakBrowser profile ID to use |
 
 ### Install & Run
 
@@ -85,7 +76,7 @@ bun run dev        # Start dev server at http://localhost:3000
 │   │   ├── router/             # TP-Link router scraping service
 │   │   └── checks/             # Online check logic
 │   ├── db/                     # Drizzle schema + connection
-│   ├── utils/                  # Authentik OAuth, helpers
+│   ├── utils/                  # Helpers
 │   ├── cron.ts                 # Periodic online check job
 │   └── index.ts                # Elysia app entry
 └── instrumentation.ts          # Next.js instrumentation (cron registration)
