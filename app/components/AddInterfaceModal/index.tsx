@@ -68,6 +68,8 @@ export function AddInterfaceModal() {
         name: data.get("Nome da Interface")?.toString() ?? "",
         mac: data.get("Endereço MAC")?.toString() ?? "",
         ip: data.get("Endereço IP")?.toString() ?? "",
+        reservedIp: data.get("IP Reservado") === "on",
+        allowList: data.get("Interface na Allow List") === "on",
       };
 
       if (editingInterface) {
@@ -125,6 +127,26 @@ export function AddInterfaceModal() {
             pattern={getRegexOfZod(z.ipv4())}
             defaultValue={editingInterface?.ip}
           />
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                name="IP Reservado"
+                className="checkbox checkbox-sm"
+                defaultChecked={editingInterface?.reservedIp}
+              />
+              <span className="label-text">IP Reservado</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                name="Interface na Allow List"
+                className="checkbox checkbox-sm"
+                defaultChecked={editingInterface?.allowList}
+              />
+              <span className="label-text">Interface na Allow List</span>
+            </label>
+          </div>
           <div className="modal-action">
             <button className="btn" type="button" onClick={closeModal}>
               Cancelar

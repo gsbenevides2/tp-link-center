@@ -41,6 +41,8 @@ export function InterfaceList({ interfaces, deviceId, onlineMacs, macToRouterInt
                 <th>IP</th>
                 <th>Roteador</th>
                 <th>Status</th>
+                <th>IP Reservado</th>
+                <th>Allow List</th>
                 <th className="w-24">Ações</th>
               </tr>
             </thead>
@@ -66,6 +68,20 @@ export function InterfaceList({ interfaces, deviceId, onlineMacs, macToRouterInt
                       >
                         {isOnline ? "Online" : "Offline"}
                       </span>
+                    </td>
+                    <td>
+                      {iface.reservedIp ? (
+                        <span className="badge badge-sm badge-info">Sim</span>
+                      ) : (
+                        <span className="text-xs text-base-content/50">Não</span>
+                      )}
+                    </td>
+                    <td>
+                      {iface.allowList ? (
+                        <span className="badge badge-sm badge-success">Sim</span>
+                      ) : (
+                        <span className="text-xs text-base-content/50">Não</span>
+                      )}
                     </td>
                     <td className="w-24">
                       <div className="flex gap-1">

@@ -1,5 +1,5 @@
 import { defineRelations, sql } from "drizzle-orm";
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 export const devices = pgTable("devices", {
   id: text()
@@ -17,6 +17,8 @@ export const interfaces = pgTable("interfaces", {
   mac: text().notNull(),
   ip: text().notNull(),
   deviceId: text().notNull(),
+  reservedIp: boolean().notNull().default(false),
+  allowList: boolean().notNull().default(false),
 });
 
 export const onlineChecks = pgTable("onlineChecks", {

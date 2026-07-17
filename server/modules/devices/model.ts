@@ -60,6 +60,18 @@ export const DeviceModel = {
                   description: "ID of the device this interface belongs to.",
                   example: crypto.randomUUID(),
                 }),
+              reservedIp: (schema) =>
+                schema.meta({
+                  title: "Reserved IP",
+                  description: "Whether the IP address is reserved for this interface.",
+                  example: false,
+                }),
+              allowList: (schema) =>
+                schema.meta({
+                  title: "Allow List",
+                  description: "Whether the interface is in the allow list.",
+                  example: false,
+                }),
             }),
           )
           .meta({
@@ -155,6 +167,18 @@ export const DeviceModel = {
         description: "IP address of interface.",
         example: "192.168.1.1",
       }),
+    reservedIp: (schema) =>
+      schema.meta({
+        title: "Reserved IP",
+        description: "Whether the IP address is reserved for this interface.",
+        example: false,
+      }),
+    allowList: (schema) =>
+      schema.meta({
+        title: "Allow List",
+        description: "Whether the interface is in the allow list.",
+        example: false,
+      }),
   }).omit({ id: true, deviceId: true }),
   createInterfaceResponse: createSelectSchema(interfaces, {
     id: () =>
@@ -195,6 +219,18 @@ export const DeviceModel = {
         title: "IP Address",
         description: "New IP address of interface.",
         example: "192.168.1.1",
+      }),
+    reservedIp: (schema) =>
+      schema.meta({
+        title: "Reserved IP",
+        description: "Whether the IP address is reserved for this interface.",
+        example: false,
+      }),
+    allowList: (schema) =>
+      schema.meta({
+        title: "Allow List",
+        description: "Whether the interface is in the allow list.",
+        example: false,
       }),
   }).omit({ id: true, deviceId: true }),
   // Delete Interface
