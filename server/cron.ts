@@ -1,15 +1,8 @@
 import { Router } from "@/server/modules/router/service";
 import { db } from "@/server/db";
 import { onlineChecks, onlineDevicesChecks } from "@/server/db/schema";
-import { Settings } from "@/server/modules/settings/service";
 
 export async function performOnlineCheck() {
-  const cronEnabled = await Settings.getCronEnabled();
-  if (!cronEnabled) {
-    console.log("[cron] Online check is disabled. Skipping...");
-    return;
-  }
-
   console.log("[cron] Starting online check...");
 
   try {

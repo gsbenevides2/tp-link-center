@@ -14,7 +14,7 @@ export function Header() {
   const cronEnabled = settings?.find((s) => s.key === "cron_enabled")?.value === "true";
 
   const handleToggleCron = () => {
-    updateSetting({ key: "cron_enabled", value: cronEnabled ? "false" : "true" });
+    updateSetting({ key: "cron_enabled", body: { value: cronEnabled ? "false" : "true" } });
   };
 
   return (

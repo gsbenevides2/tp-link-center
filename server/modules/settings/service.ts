@@ -1,6 +1,5 @@
 import { db } from "@/server/db";
 import { settings } from "@/server/db/schema";
-import { eq } from "drizzle-orm";
 import type { SettingsModel } from "@/server/modules/settings/model";
 
 export abstract class Settings {
@@ -19,19 +18,13 @@ export abstract class Settings {
     key: string,
     value: string,
   ): Promise<SettingsModel["getResponse"]> {
-    const existing = await db.query.settings.findFirst({
-      where: { key },
-    });
-
-    if (existing) {
-      await db
-        .update(settings)
-        .set({ value })
-        .where(eq(settings.key, key));
-      return { key, value };
-    }
-
-    await db.insert(settings).values({ key, value });
+    await db
+      .insert(settings)
+      .values({ key, value })
+      .onConflictDoUpdate({
+        target: settings.key,
+        set: { value },
+      });
     return { key, value };
   }
 
