@@ -105,6 +105,9 @@ export function UnregisteredDevicesSection() {
         const result = await addDevice({
           name: deviceName,
           brand: deviceBrand,
+          type: "client",
+          isController: false,
+          routerPassword: null,
         });
         const newDeviceId = (result as { id: string }).id;
         await addInterface({

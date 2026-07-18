@@ -77,7 +77,13 @@ export function useUpdateDevice() {
       body,
     }: {
       deviceId: string;
-      body: { name: string; brand: string };
+      body: {
+        name: string;
+        brand: string;
+        type: "router" | "client";
+        isController: boolean;
+        routerPassword: string | null;
+      };
     }) => {
       await clientSideApi.devices({ id: deviceId }).put(body);
     },

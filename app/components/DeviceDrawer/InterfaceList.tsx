@@ -10,15 +10,17 @@ export type Interface = Device["interfaces"][number];
 
 interface Props {
   deviceId: string;
+  deviceType: "router" | "client";
   interfaces: Interface[];
   onlineMacs: Set<string>;
   macToRouterInterface: Map<string, string>;
 }
 
-export function InterfaceList({ interfaces, deviceId, onlineMacs, macToRouterInterface }: Props) {
+export function InterfaceList({ interfaces, deviceId, deviceType, onlineMacs, macToRouterInterface }: Props) {
   const addInterfaceModal = useAddInterfaceModal();
   const deleteInterfaceModal = useDeleteInterfaceModal(deviceId);
   const hasInterfaces = interfaces.length > 0;
+  const isRouter = deviceType === "router";
 
   return (
     <>
@@ -26,7 +28,7 @@ export function InterfaceList({ interfaces, deviceId, onlineMacs, macToRouterInt
         <h3 className="font-bold text-base">Interfaces</h3>
         <button
           className="btn btn-sm btn-ghost"
-          onClick={() => addInterfaceModal?.open(deviceId)}
+          onClick={() => addInterfaceModal?.open(deviceId, undefined, deviceType)}
         >
           <VscAddCompact />
         </button>
@@ -41,8 +43,8 @@ export function InterfaceList({ interfaces, deviceId, onlineMacs, macToRouterInt
                 <th>IP</th>
                 <th>Roteador</th>
                 <th>Status</th>
-                <th>IP Reservado</th>
-                <th>Allow List</th>
+                {!isRouter && <th>IP Reservado</th>}
+                {!isRouter && <th>Allow List</th>}
                 <th className="w-24">Ações</th>
               </tr>
             </thead>
@@ -69,25 +71,29 @@ export function InterfaceList({ interfaces, deviceId, onlineMacs, macToRouterInt
                         {isOnline ? "Online" : "Offline"}
                       </span>
                     </td>
-                    <td>
-                      {iface.reservedIp ? (
-                        <span className="badge badge-sm badge-info">Sim</span>
-                      ) : (
-                        <span className="text-xs text-base-content/50">Não</span>
-                      )}
-                    </td>
-                    <td>
-                      {iface.allowList ? (
-                        <span className="badge badge-sm badge-success">Sim</span>
-                      ) : (
-                        <span className="text-xs text-base-content/50">Não</span>
-                      )}
-                    </td>
+                    {!isRouter && (
+                      <td>
+                        {iface.reservedIp ? (
+                          <span className="badge badge-sm badge-info">Sim</span>
+                        ) : (
+                          <span className="text-xs text-base-content/50">Não</span>
+                        )}
+                      </td>
+                    )}
+                    {!isRouter && (
+                      <td>
+                        {iface.allowList ? (
+                          <span className="badge badge-sm badge-success">Sim</span>
+                        ) : (
+                          <span className="text-xs text-base-content/50">Não</span>
+                        )}
+                      </td>
+                    )}
                     <td className="w-24">
                       <div className="flex gap-1">
                         <button
                           className="btn btn-sm btn-ghost"
-                          onClick={() => addInterfaceModal?.open(deviceId, iface)}
+                          onClick={() => addInterfaceModal?.open(deviceId, iface, deviceType)}
                         >
                           <VscEdit />
                         </button>

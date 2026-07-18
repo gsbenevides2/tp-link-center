@@ -85,6 +85,7 @@ export function RegisteredDevicesSection() {
               <th className="w-94">ID</th>
               <th>Nome</th>
               <th>Fabricante</th>
+              <th>Tipo</th>
               <th>Roteador</th>
               <th>Status</th>
               <th className="w-68">Ações</th>
@@ -102,6 +103,18 @@ export function RegisteredDevicesSection() {
                   <th className="w-94">{device.id}</th>
                   <td>{device.name}</td>
                   <td>{device.brand}</td>
+                  <td>
+                    {device.type === "router" ? (
+                      <span className="badge badge-info badge-sm">
+                        Roteador
+                        {device.isController && " (Controlador)"}
+                      </span>
+                    ) : (
+                      <span className="badge badge-ghost badge-sm">
+                        Cliente
+                      </span>
+                    )}
+                  </td>
                   <td>
                     {routerInterface ? (
                       <span className="text-sm">{routerInterface}</span>

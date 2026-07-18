@@ -15,6 +15,13 @@ export abstract class Device {
   static async create(
     params: DeviceModel["createBody"],
   ): Promise<DeviceModel["createReponse"]> {
+    if (params.type === "router" && params.isController) {
+      await db
+        .update(devices)
+        .set({ isController: false })
+        .where(eq(devices.isController, true));
+    }
+
     const createdDevice = await db.insert(devices).values(params).returning();
     const id = createdDevice.at(0)?.id;
     if (!id) throw Error("Id not generated");
@@ -30,6 +37,13 @@ export abstract class Device {
     params: DeviceModel["updateParams"],
     body: DeviceModel["updateBody"],
   ) {
+    if (body.type === "router" && body.isController) {
+      await db
+        .update(devices)
+        .set({ isController: false })
+        .where(eq(devices.isController, true));
+    }
+
     await db.update(devices).set(body).where(eq(devices.id, params.id));
   }
   static async createInterface(
@@ -40,6 +54,15 @@ export abstract class Device {
       where: { id: deviceId },
     });
     if (!device) throw new Error("Device not found");
+
+    if (device.type === "router") {
+      const existingInterface = await db.query.interfaces.findFirst({
+        where: { deviceId },
+      });
+      if (existingInterface) {
+        throw new Error("Router devices can only have one interface");
+      }
+    }
 
     const created = await db
       .insert(interfaces)
@@ -79,5 +102,28 @@ export abstract class Device {
     });
 
     return dbInterface?.device?.name;
+  }
+  static async getControllerRouter(): Promise<{
+    id: string;
+    name: string;
+    ip: string;
+    password: string;
+  } | null> {
+    const controller = await db.query.devices.findFirst({
+      where: { type: "router", isController: true },
+      with: {
+        interfaces: true,
+      },
+    });
+
+    if (!controller || !controller.routerPassword) return null;
+    if (controller.interfaces.length === 0) return null;
+
+    return {
+      id: controller.id,
+      name: controller.name,
+      ip: controller.interfaces[0].ip,
+      password: controller.routerPassword,
+    };
   }
 }

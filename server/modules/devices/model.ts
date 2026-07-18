@@ -3,6 +3,12 @@ import { createInsertSchema, createSelectSchema } from "drizzle-orm/zod";
 import { type UnwrapSchema } from "elysia";
 import z from "zod";
 
+const deviceTypeSchema = z.enum(["router", "client"]).meta({
+  title: "Device Type",
+  description: "Type of device (router or client).",
+  example: "client",
+});
+
 export const DeviceModel = {
   // Get Devices
   getResponse: z
@@ -25,6 +31,20 @@ export const DeviceModel = {
             title: "Device Brand",
             description: "Brand of Device.",
             example: "Cisco",
+          }),
+        type: () =>
+          deviceTypeSchema,
+        isController: (schema) =>
+          schema.meta({
+            title: "Is Controller",
+            description: "Whether this router is the controller.",
+            example: false,
+          }),
+        routerPassword: (schema) =>
+          schema.meta({
+            title: "Router Password",
+            description: "Password for router web admin (only for routers).",
+            example: "password123",
           }),
       }).extend({
         interfaces: z
@@ -98,6 +118,20 @@ export const DeviceModel = {
         description: "Brand of device to save.",
         example: "Cisco",
       }),
+    type: () =>
+      deviceTypeSchema,
+    isController: (schema) =>
+      schema.meta({
+        title: "Is Controller",
+        description: "Whether this router is the controller.",
+        example: false,
+      }),
+    routerPassword: (schema) =>
+      schema.meta({
+        title: "Router Password",
+        description: "Password for router web admin (only for routers).",
+        example: "password123",
+      }),
   }).omit({ id: true }),
   createReponse: createSelectSchema(devices, {
     id: () =>
@@ -137,6 +171,20 @@ export const DeviceModel = {
         title: "Brand of Device",
         description: "New brand of device.",
         example: "Cisco",
+      }),
+    type: () =>
+      deviceTypeSchema,
+    isController: (schema) =>
+      schema.meta({
+        title: "Is Controller",
+        description: "Whether this router is the controller.",
+        example: false,
+      }),
+    routerPassword: (schema) =>
+      schema.meta({
+        title: "Router Password",
+        description: "Password for router web admin (only for routers).",
+        example: "password123",
       }),
   }).omit({ id: true }),
   // Create Interface

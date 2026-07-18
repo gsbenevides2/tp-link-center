@@ -1,5 +1,13 @@
 import { defineRelations, sql } from "drizzle-orm";
-import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
+
+export const deviceTypeEnum = pgEnum("device_type", ["router", "client"]);
 
 export const settings = pgTable("settings", {
   key: text().primaryKey(),
@@ -12,6 +20,9 @@ export const devices = pgTable("devices", {
     .$defaultFn(() => crypto.randomUUID()),
   name: text().notNull(),
   brand: text().notNull(),
+  type: deviceTypeEnum().notNull().default("client"),
+  isController: boolean().notNull().default(false),
+  routerPassword: text(),
 });
 
 export const interfaces = pgTable("interfaces", {

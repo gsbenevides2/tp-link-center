@@ -32,11 +32,20 @@ export class Sync {
       where: {
         reservedIp: true,
       },
+      with: {
+        device: true,
+      },
     });
+
+    const clientInterfaces = dbInterfaces.filter(
+      (i) => i.device?.type === "client",
+    );
 
     const routerEntries = await Router.listDHCPEntry();
 
-    const dbMacs = new Set(dbInterfaces.map((i) => normalizeMac(i.mac)));
+    const dbMacs = new Set(
+      clientInterfaces.map((i) => normalizeMac(i.mac)),
+    );
     const routerMacToEntry = new Map(
       routerEntries.map((e) => [normalizeMac(e.mac), e]),
     );
@@ -55,7 +64,7 @@ export class Sync {
       }
     }
 
-    for (const iface of dbInterfaces) {
+    for (const iface of clientInterfaces) {
       const normalizedMac = normalizeMac(iface.mac);
       if (!routerMacToEntry.has(normalizedMac)) {
         try {
@@ -85,7 +94,14 @@ export class Sync {
       where: {
         allowList: true,
       },
+      with: {
+        device: true,
+      },
     });
+
+    const clientInterfaces = dbInterfaces.filter(
+      (i) => i.device?.type === "client",
+    );
 
     const chains = await Router.listFirewallChains();
     const accessChain = chains.find((c) => c.name === "ACCESSCTL_WHITE");
@@ -100,7 +116,9 @@ export class Sync {
       (r) => r.stack[0] === accessChain.stack[0],
     );
 
-    const dbMacs = new Set(dbInterfaces.map((i) => normalizeMac(i.mac)));
+    const dbMacs = new Set(
+      clientInterfaces.map((i) => normalizeMac(i.mac)),
+    );
     const routerMacToRule = new Map(
       routerRules.map((r) => [normalizeMac(r.sourceMAC), r]),
     );
@@ -119,7 +137,7 @@ export class Sync {
       }
     }
 
-    for (const iface of dbInterfaces) {
+    for (const iface of clientInterfaces) {
       const normalizedMac = normalizeMac(iface.mac);
       if (!routerMacToRule.has(normalizedMac)) {
         try {

@@ -5,6 +5,7 @@ Admin dashboard to manage TP-Link routers, monitor connected devices, and track 
 ## Features
 
 - **Device Management** — Register and manage network devices with multiple interfaces (MAC + IP)
+- **Device Types** — Differentiate between routers (with controller/agent roles) and client devices
 - **Live Status Detection** — Scrapes the TP-Link router web interface via Lightpanda (headless browser via CDP) to detect online/offline devices
 - **Uptime Tracking** — Automatic online checks every 5 minutes with 24-hour connection history per device
 - **Unregistered Device Discovery** — Identify devices connected to the router that aren't yet registered, link or register them directly
@@ -35,8 +36,6 @@ Create `.env` and fill in:
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_URL` | PostgreSQL connection string |
-| `ROUTER_ENDPOINT` | TP-Link router web admin URL |
-| `ROUTER_PASSWORD` | TP-Link router login password |
 | `BROWSER_URL` | Chrome CDP endpoint (e.g. `http://127.0.0.1:9222`) |
 
 ### Install & Run

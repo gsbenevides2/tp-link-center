@@ -3,22 +3,21 @@ import { RouterModel } from "./model";
 import getVendor from "mac-oui-lookup";
 import { Device } from "../devices/service";
 
-const { ROUTER_PASSWORD, ROUTER_ENDPOINT, BROWSER_URL } = process.env;
+const { BROWSER_URL } = process.env;
 
 type ConnectedDevices = RouterModel["getConnectedDevicesResponse"];
 type DhcpEntries = RouterModel["listDHCPEntryResponse"];
 
-if (!ROUTER_PASSWORD) throw new Error("Missing ROUTER_PASSWORD");
-if (!ROUTER_ENDPOINT) throw new Error("Missing ROUTER_ENDPOINT");
 if (!BROWSER_URL) throw new Error("Missing BROWSER_URL");
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function createPage() {
+async function createPage(endpoint: string) {
   const browser = await puppeteer.connect({
     browserURL: BROWSER_URL!,
   });
   const page = await browser.newPage();
+  await page.goto(endpoint);
   return { browser, page };
 }
 
@@ -49,15 +48,18 @@ export class Router {
     this.processQueue.shift();
   }
 
-  private static async login(page: import("puppeteer-core").Page) {
-    await page.goto(ROUTER_ENDPOINT!);
+  private static async login(
+    page: import("puppeteer-core").Page,
+    endpoint: string,
+    password: string,
+  ) {
     await wait(200);
     const isLoggedOut = await evaluate<boolean>(
       page,
       `$("#pc-login-password").is(":visible")`,
     );
     if (!isLoggedOut) return;
-    await evaluate(page, `$("#pc-login-password").val("${ROUTER_PASSWORD}")`);
+    await evaluate(page, `$("#pc-login-password").val("${password}")`);
     await wait(100);
     await evaluate(page, `$("#pc-login-btn").click()`);
 
@@ -242,10 +244,19 @@ export class Router {
   }
 
   static async getConnectedDevices(): Promise<ConnectedDevices> {
+    const controller = await Device.getControllerRouter();
+    if (!controller) {
+      throw new Error(
+        "No controller router registered. Please register a router controller first.",
+      );
+    }
+
     await this.waitRelease();
-    const { page } = await createPage();
+    const { page } = await createPage(
+      `http://${controller.ip}`,
+    );
     try {
-      await this.login(page);
+      await this.login(page, controller.ip, controller.password);
 
       const results = await this.getConnectedEasyMeshDevices(page);
       results.push(...(await this.getConnectedWifiDevices(page)));
@@ -258,10 +269,19 @@ export class Router {
   }
 
   static async listDHCPEntry(): Promise<DhcpEntries> {
+    const controller = await Device.getControllerRouter();
+    if (!controller) {
+      throw new Error(
+        "No controller router registered. Please register a router controller first.",
+      );
+    }
+
     await this.waitRelease();
-    const { page } = await createPage();
+    const { page } = await createPage(
+      `http://${controller.ip}`,
+    );
     try {
-      await this.login(page);
+      await this.login(page, controller.ip, controller.password);
 
       const DEV2_DHCPV4_POOL_STATICADDR = await evaluate<
         Array<{
@@ -296,10 +316,19 @@ export class Router {
   }
 
   static async addDHCPEntry(mac: string, ip: string): Promise<string> {
+    const controller = await Device.getControllerRouter();
+    if (!controller) {
+      throw new Error(
+        "No controller router registered. Please register a router controller first.",
+      );
+    }
+
     await this.waitRelease();
-    const { page } = await createPage();
+    const { page } = await createPage(
+      `http://${controller.ip}`,
+    );
     try {
-      await this.login(page);
+      await this.login(page, controller.ip, controller.password);
 
       const DEV2_DHCPV4_POOL_STATICADDR = await evaluate<{
         stack: string;
@@ -332,10 +361,19 @@ export class Router {
   }
 
   static async removeDHCPEntry(id: string) {
+    const controller = await Device.getControllerRouter();
+    if (!controller) {
+      throw new Error(
+        "No controller router registered. Please register a router controller first.",
+      );
+    }
+
     await this.waitRelease();
-    const { page } = await createPage();
+    const { page } = await createPage(
+      `http://${controller.ip}`,
+    );
     try {
-      await this.login(page);
+      await this.login(page, controller.ip, controller.password);
       await evaluate<void>(
         page,
         `(function routers(){
@@ -360,10 +398,19 @@ export class Router {
   }
 
   static async listFirewallChains() {
+    const controller = await Device.getControllerRouter();
+    if (!controller) {
+      throw new Error(
+        "No controller router registered. Please register a router controller first.",
+      );
+    }
+
     await this.waitRelease();
-    const { page } = await createPage();
+    const { page } = await createPage(
+      `http://${controller.ip}`,
+    );
     try {
-      await this.login(page);
+      await this.login(page, controller.ip, controller.password);
 
       const chains = await evaluate<
         Array<{
@@ -403,10 +450,19 @@ export class Router {
   }
 
   static async listFirewallRules() {
+    const controller = await Device.getControllerRouter();
+    if (!controller) {
+      throw new Error(
+        "No controller router registered. Please register a router controller first.",
+      );
+    }
+
     await this.waitRelease();
-    const { page } = await createPage();
+    const { page } = await createPage(
+      `http://${controller.ip}`,
+    );
     try {
-      await this.login(page);
+      await this.login(page, controller.ip, controller.password);
 
       const rules = await evaluate<
         Array<{
@@ -460,10 +516,19 @@ export class Router {
     sourceIP?: string;
     target?: string;
   }) {
+    const controller = await Device.getControllerRouter();
+    if (!controller) {
+      throw new Error(
+        "No controller router registered. Please register a router controller first.",
+      );
+    }
+
     await this.waitRelease();
-    const { page } = await createPage();
+    const { page } = await createPage(
+      `http://${controller.ip}`,
+    );
     try {
-      await this.login(page);
+      await this.login(page, controller.ip, controller.password);
 
       const result = await evaluate<{
         stack: string;
@@ -502,10 +567,19 @@ export class Router {
   }
 
   static async removeFirewallRule(ruleStack: string) {
+    const controller = await Device.getControllerRouter();
+    if (!controller) {
+      throw new Error(
+        "No controller router registered. Please register a router controller first.",
+      );
+    }
+
     await this.waitRelease();
-    const { page } = await createPage();
+    const { page } = await createPage(
+      `http://${controller.ip}`,
+    );
     try {
-      await this.login(page);
+      await this.login(page, controller.ip, controller.password);
       await evaluate<void>(
         page,
         `(function routers(){

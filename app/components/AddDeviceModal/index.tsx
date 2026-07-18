@@ -21,6 +21,7 @@ export function AddDeviceModal() {
   const { mutateAsync: addDevice } = useAddDevice();
   const { mutateAsync: updateDevice } = useUpdateDevice();
   const [editingDevice, setEditingDevice] = useState<Device>();
+  const [deviceType, setDeviceType] = useState<"router" | "client">("client");
 
   const isEditing = Boolean(editingDevice);
 
@@ -30,11 +31,13 @@ export function AddDeviceModal() {
     formRef.current.reset();
     dialogRef.current.close();
     setEditingDevice(undefined);
+    setDeviceType("client");
   }, [dialogRef, formRef]);
 
   const openModal = useCallback((device?: Device) => {
     if (!dialogRef.current) return;
     setEditingDevice(device);
+    setDeviceType(device?.type ?? "client");
     dialogRef.current.open = true;
   }, [dialogRef]);
 
@@ -45,11 +48,22 @@ export function AddDeviceModal() {
       const data = new FormData(currentForm);
       const name = data.get("Nome do Dispositivo")?.toString() ?? "";
       const brand = data.get("Fabricante do Dispositivo")?.toString() ?? "";
+      const type = data.get("Tipo do Dispositivo")?.toString() as "router" | "client";
+      const isController = data.get("Roteador Controlador") === "on";
+      const routerPassword = data.get("Senha do Roteador")?.toString() ?? "";
+
+      const body = {
+        name,
+        brand,
+        type,
+        isController: type === "router" ? isController : false,
+        routerPassword: type === "router" ? routerPassword : null,
+      };
 
       if (editingDevice) {
-        await updateDevice({ deviceId: editingDevice.id, body: { name, brand } });
+        await updateDevice({ deviceId: editingDevice.id, body });
       } else {
-        await addDevice({ name, brand });
+        await addDevice(body);
       }
       closeModal();
     },
@@ -74,6 +88,20 @@ export function AddDeviceModal() {
           onSubmit={handleSubmit}
           ref={formRef}
         >
+          <div className="flex flex-col gap-1">
+            <label className="label">
+              <span className="label-text">Tipo do Dispositivo</span>
+            </label>
+            <select
+              name="Tipo do Dispositivo"
+              className="select select-bordered w-full"
+              value={deviceType}
+              onChange={(e) => setDeviceType(e.target.value as "router" | "client")}
+            >
+              <option value="client">Cliente</option>
+              <option value="router">Roteador</option>
+            </select>
+          </div>
           <Input
             required
             label="Nome do Dispositivo"
@@ -88,6 +116,27 @@ export function AddDeviceModal() {
             errorMessage="Preenchimento Obrigatório."
             defaultValue={editingDevice?.brand}
           />
+          {deviceType === "router" && (
+            <>
+              <Input
+                required
+                label="Senha do Roteador"
+                placeholder="Digite a senha do roteador:"
+                errorMessage="Preenchimento Obrigatório."
+                type="password"
+                defaultValue={editingDevice?.routerPassword ?? ""}
+              />
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="Roteador Controlador"
+                  className="checkbox checkbox-sm"
+                  defaultChecked={editingDevice?.isController}
+                />
+                <span className="label-text">Roteador Controlador</span>
+              </label>
+            </>
+          )}
           <div className="modal-action">
             <button className="btn" type="button" onClick={closeModal}>
               Cancelar
