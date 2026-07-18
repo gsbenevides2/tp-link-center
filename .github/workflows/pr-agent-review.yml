@@ -20,7 +20,7 @@ jobs:
         uses: the-pr-agent/pr-agent@v0.36.0
         id: pr_agent
         env:
-          config.model: "openrouter/anthropic/claude-3.7-sonnet"
+          config.model: "openrouter/xiaomi/mimo-v2.5"
           OPENROUTER.KEY: ${{ secrets.OPENROUTER_API_KEY }}
           TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
           github_action_config.auto_review: "true"
