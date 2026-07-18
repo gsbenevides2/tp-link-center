@@ -78,6 +78,20 @@ export const CheckModel = {
       description: "The most recent online check with its connected devices.",
     }),
 
+  // Trigger Online Check
+  triggerCheckResponse: z
+    .object({
+      success: z.boolean().meta({
+        title: "Success",
+        description: "Whether the check was triggered successfully.",
+        example: true,
+      }),
+    })
+    .meta({
+      title: "Trigger Check Response",
+      description: "Response after manually triggering an online check.",
+    }),
+
   // Get Device History
   getDeviceHistoryParams: z.object({
     id: z.uuid().meta({
