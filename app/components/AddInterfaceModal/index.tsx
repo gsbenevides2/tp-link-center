@@ -12,6 +12,7 @@ import {
   useAddInterface,
   useUpdateInterface,
   type Device,
+  type DeviceType,
 } from "../RegisteredDevicesSection/useDevices";
 import z from "zod";
 import { getRegexOfZod } from "@/app/utils/getRegexOfZod";
@@ -22,7 +23,7 @@ interface Context {
   open: (
     deviceId: string,
     interfaceToEdit?: Interface,
-    deviceType?: "router" | "client",
+    deviceType?: DeviceType,
     isController?: boolean,
   ) => void;
   close: () => void;
@@ -41,7 +42,7 @@ export function AddInterfaceModal() {
   const { mutateAsync: updateInterface } = useUpdateInterface();
   const [currentDeviceId, setCurrentDeviceId] = useState<string>();
   const [editingInterface, setEditingInterface] = useState<Interface>();
-  const [currentDeviceType, setCurrentDeviceType] = useState<"router" | "client">("client");
+  const [currentDeviceType, setCurrentDeviceType] = useState<DeviceType>("client");
   const [currentIsController, setCurrentIsController] = useState(false);
 
   const isEditing = Boolean(editingInterface);
@@ -61,7 +62,7 @@ export function AddInterfaceModal() {
     (
       deviceId: string,
       interfaceToEdit?: Interface,
-      deviceType?: "router" | "client",
+      deviceType?: DeviceType,
       isController?: boolean,
     ) => {
       if (!dialogRef.current) return;

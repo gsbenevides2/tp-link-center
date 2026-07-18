@@ -7,6 +7,7 @@ export type GetDeviceFuncReturn = NonNullable<
 >;
 
 export type Device = GetDeviceFuncReturn[number];
+export type DeviceType = Device["type"];
 
 export const DEVICES_KEY = "devices" as const;
 export const CHECKS_KEY = "checks" as const;
@@ -80,7 +81,7 @@ export function useUpdateDevice() {
       body: {
         name: string;
         brand: string;
-        type: "router" | "client";
+        type: DeviceType;
         isController: boolean;
         routerPassword: string | null;
       };

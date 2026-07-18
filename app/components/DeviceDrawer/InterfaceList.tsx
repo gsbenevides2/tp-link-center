@@ -1,5 +1,8 @@
 import { VscAddCompact, VscEdit, VscTrash } from "react-icons/vsc";
-import { Device } from "../RegisteredDevicesSection/useDevices";
+import {
+  Device,
+  DeviceType,
+} from "../RegisteredDevicesSection/useDevices";
 import { useAddInterfaceModal } from "../AddInterfaceModal";
 import {
   DeleteInterfaceModal,
@@ -10,7 +13,7 @@ export type Interface = Device["interfaces"][number];
 
 interface Props {
   deviceId: string;
-  deviceType: "router" | "client";
+  deviceType: DeviceType;
   isController: boolean;
   interfaces: Interface[];
   onlineMacs: Set<string>;

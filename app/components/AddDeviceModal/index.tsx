@@ -2,7 +2,7 @@
 
 import { useRef, useCallback, useLayoutEffect, useState, SubmitEvent } from "react";
 import Input from "../Input";
-import { useAddDevice, useUpdateDevice, type Device } from "../RegisteredDevicesSection/useDevices";
+import { useAddDevice, useUpdateDevice, type Device, type DeviceType } from "../RegisteredDevicesSection/useDevices";
 
 interface Context {
   open: (device?: Device) => void;
@@ -21,7 +21,7 @@ export function AddDeviceModal() {
   const { mutateAsync: addDevice } = useAddDevice();
   const { mutateAsync: updateDevice } = useUpdateDevice();
   const [editingDevice, setEditingDevice] = useState<Device>();
-  const [deviceType, setDeviceType] = useState<"router" | "client">("client");
+  const [deviceType, setDeviceType] = useState<DeviceType>("client");
 
   const isEditing = Boolean(editingDevice);
 
@@ -48,7 +48,7 @@ export function AddDeviceModal() {
       const data = new FormData(currentForm);
       const name = data.get("Nome do Dispositivo")?.toString() ?? "";
       const brand = data.get("Fabricante do Dispositivo")?.toString() ?? "";
-      const type = data.get("Tipo do Dispositivo")?.toString() as "router" | "client";
+      const type = data.get("Tipo do Dispositivo")?.toString() as DeviceType;
       const isController = data.get("Roteador Controlador") === "on";
       const routerPassword = data.get("Senha do Roteador")?.toString() ?? "";
 
@@ -96,7 +96,7 @@ export function AddDeviceModal() {
               name="Tipo do Dispositivo"
               className="select select-bordered w-full"
               value={deviceType}
-              onChange={(e) => setDeviceType(e.target.value as "router" | "client")}
+              onChange={(e) => setDeviceType(e.target.value as DeviceType)}
             >
               <option value="client">Cliente</option>
               <option value="router">Roteador</option>
