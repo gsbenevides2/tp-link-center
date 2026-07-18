@@ -100,24 +100,15 @@ export const router = new Elysia({
     },
   )
   .get(
-    "/firewall/rules/:chainStack",
-    async ({ params }) => {
-      return status(
-        StatusMap.OK,
-        await Router.listFirewallRules(params.chainStack),
-      );
+    "/firewall/rules",
+    async () => {
+      return status(StatusMap.OK, await Router.listFirewallRules());
     },
     {
       detail: {
         summary: "List Firewall Rules",
         description: "List all rules in a specific firewall chain.",
       },
-      params: z.object({
-        chainStack: z.string().meta({
-          title: "Chain Stack ID",
-          description: "Stack ID of the chain to list rules from.",
-        }),
-      }),
       response: {
         [StatusMap.OK]: RouterModel.firewallRuleResponse,
       },

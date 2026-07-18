@@ -1,4 +1,3 @@
-import { unknown } from "zod";
 import { RouterModel } from "./model";
 import getVendor from "mac-oui-lookup";
 import { Device } from "../devices/service";
@@ -15,6 +14,7 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export class Router {
   static processQueue: string[] = [];
+
   private static vendorCache = new Map<string, string>();
 
   private static async waitRelease() {
@@ -32,6 +32,10 @@ export class Router {
 
   private static async login(page: Bun.WebView) {
     await page.navigate(ROUTER_ENPOINT!);
+    const isLoggedOut = await page.evaluate<boolean>(
+      `$("#pc-login-password").is(":visible")`,
+    );
+    if (!isLoggedOut) return;
     await page.click("#pc-login-password");
     await page.type(ROUTER_PASSWORD!);
     await page.click("#pc-login-btn");
@@ -208,7 +212,6 @@ export class Router {
       const results = await this.getConnectedEasyMeshDevices(page);
       results.push(...(await this.getConnectedWifiDevices(page)));
       results.push(...(await this.getConnectedWiredDevices(page)));
-
       page.close();
       return results;
     } finally {
@@ -239,7 +242,7 @@ export class Router {
             })
             })
         })()`);
-
+      page.close();
       return DEV2_DHCPV4_POOL_STATICADDR.map((e) => ({
         ip: e.yiaddr,
         mac: e.chaddr,
@@ -275,11 +278,13 @@ export class Router {
             })
         })()`);
 
+      page.close();
       return DEV2_DHCPV4_POOL_STATICADDR.stack;
     } finally {
       await this.release();
     }
   }
+
   static async removeDHCPEntry(id: string) {
     await this.waitRelease();
     try {
@@ -298,6 +303,7 @@ export class Router {
             })
             })
         })()`);
+      page.close();
     } finally {
       await this.release();
     }
@@ -330,6 +336,7 @@ export class Router {
             })
         })()`);
 
+      page.close();
       return chains.map((c) => ({
         name: c.name,
         enable: c.enable,
@@ -341,7 +348,7 @@ export class Router {
     }
   }
 
-  static async listFirewallRules(chainStack: string) {
+  static async listFirewallRules() {
     await this.waitRelease();
     try {
       await using page = new Bun.WebView();
@@ -362,7 +369,7 @@ export class Router {
         return new Promise((resolve, reject)=>{
             $.dm.getList({
                 oid: "DEV2_FW_CHAIN_RULE",
-                data: { pstack: "${chainStack}" },
+                data: { pstack: "" },
                 callback: {
                     success: (res)=>resolve(res.map((r)=>({
                         ruleName: r.X_TP_RuleName,
@@ -381,6 +388,7 @@ export class Router {
             })
         })()`);
 
+      page.close();
       return rules;
     } finally {
       await this.release();
@@ -410,7 +418,7 @@ export class Router {
                     X_TP_RuleType: 2,
                     X_TP_RuleName: "${params.name}",
                     X_TP_SourceType: 2,
-                    sourceIP: "${params.sourceIP ?? ""}",
+                    ${params.sourceIP ? `sourceIP: "${params.sourceIP}",` : ""}
                     X_TP_SourceMACAddress: "${params.sourceMAC}",
                     pstack: "${params.chainStack}",
                     target: "${params.target ?? "Drop"}"
@@ -424,6 +432,7 @@ export class Router {
             })
         })()`);
 
+      page.close();
       return result.stack;
     } finally {
       await this.release();
@@ -450,6 +459,7 @@ export class Router {
             })
             })
         })()`);
+      page.close();
     } finally {
       await this.release();
     }
