@@ -1,11 +1,12 @@
 "use client";
 
 import { Logo } from "@/app/icons/logo";
-import { useSyncRouter } from "../RegisteredDevicesSection/useDevices";
-import { VscSync } from "react-icons/vsc";
+import { useSyncRouter, useTriggerOnlineCheck } from "../RegisteredDevicesSection/useDevices";
+import { VscSync, VscCheck } from "react-icons/vsc";
 
 export function Header() {
   const { mutate: syncRouter, isPending } = useSyncRouter();
+  const { mutate: triggerCheck, isPending: isTriggering } = useTriggerOnlineCheck();
 
   return (
     <header className="flex items-center justify-between bg-primary px-12 py-4 text-white">
@@ -15,18 +16,32 @@ export function Header() {
           Centro de Administração de Dispositivos
         </h1>
       </div>
-      <button
-        className="btn btn-sm btn-ghost text-white"
-        onClick={() => syncRouter()}
-        disabled={isPending}
-      >
-        {isPending ? (
-          <span className="loading loading-spinner loading-sm"></span>
-        ) : (
-          <VscSync />
-        )}
-        Sincronizar
-      </button>
+      <div className="flex gap-2">
+        <button
+          className="btn btn-sm btn-ghost text-white"
+          onClick={() => triggerCheck()}
+          disabled={isTriggering}
+        >
+          {isTriggering ? (
+            <span className="loading loading-spinner loading-sm"></span>
+          ) : (
+            <VscCheck />
+          )}
+          Verificar Dispositivos
+        </button>
+        <button
+          className="btn btn-sm btn-ghost text-white"
+          onClick={() => syncRouter()}
+          disabled={isPending}
+        >
+          {isPending ? (
+            <span className="loading loading-spinner loading-sm"></span>
+          ) : (
+            <VscSync />
+          )}
+          Sincronizar
+        </button>
+      </div>
     </header>
   );
 }

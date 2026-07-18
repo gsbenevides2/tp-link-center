@@ -174,3 +174,19 @@ export function useSyncRouter() {
     },
   });
 }
+
+export function useTriggerOnlineCheck() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const response = await clientSideApi.checks.trigger.post();
+      if (response.error) throw response.error;
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [CHECKS_KEY, "latest"] });
+      queryClient.invalidateQueries({ queryKey: [DEVICES_KEY] });
+    },
+  });
+}

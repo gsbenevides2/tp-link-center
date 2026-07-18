@@ -35,7 +35,7 @@ Create `.env` and fill in:
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_URL` | PostgreSQL connection string |
-| `ROUTER_ENPOINT` | TP-Link router web admin URL |
+| `ROUTER_ENDPOINT` | TP-Link router web admin URL |
 | `ROUTER_PASSWORD` | TP-Link router login password |
 | `BROWSER_URL` | Chrome CDP endpoint (e.g. `http://127.0.0.1:9222`) |
 

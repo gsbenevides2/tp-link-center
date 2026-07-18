@@ -3,13 +3,13 @@ import { RouterModel } from "./model";
 import getVendor from "mac-oui-lookup";
 import { Device } from "../devices/service";
 
-const { ROUTER_PASSWORD, ROUTER_ENPOINT, BROWSER_URL } = process.env;
+const { ROUTER_PASSWORD, ROUTER_ENDPOINT, BROWSER_URL } = process.env;
 
 type ConnectedDevices = RouterModel["getConnectedDevicesResponse"];
 type DhcpEntries = RouterModel["listDHCPEntryResponse"];
 
 if (!ROUTER_PASSWORD) throw new Error("Missing ROUTER_PASSWORD");
-if (!ROUTER_ENPOINT) throw new Error("Missing ROUTER_ENPOINT");
+if (!ROUTER_ENDPOINT) throw new Error("Missing ROUTER_ENDPOINT");
 if (!BROWSER_URL) throw new Error("Missing BROWSER_URL");
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -50,7 +50,7 @@ export class Router {
   }
 
   private static async login(page: import("puppeteer-core").Page) {
-    await page.goto(ROUTER_ENPOINT!);
+    await page.goto(ROUTER_ENDPOINT!);
     await wait(200);
     const isLoggedOut = await evaluate<boolean>(
       page,

@@ -6,7 +6,7 @@ services:
       - '3000:3000'
     environment:
       - DATABASE_URL=${DATABASE_URL}
-      - ROUTER_ENPOINT=${ROUTER_ENPOINT}
+      - ROUTER_ENDPOINT=${ROUTER_ENDPOINT}
       - ROUTER_PASSWORD=${ROUTER_PASSWORD}
       - BROWSER_URL=http://172.30.0.20:9222
     depends_on:
