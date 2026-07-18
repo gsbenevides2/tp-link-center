@@ -20,7 +20,7 @@ VERSION_TAG="${IMAGE_URL}:${VERSION}"
 
 echo "Logando no Github Container Registry..."
 
-echo "${GITHUB_TOKEN}" | docker login ${REGISTRY} -u "${REPO_OWNER}" --password-stdin
+echo "${TOKEN_GITHUB}" | docker login ${REGISTRY} -u "${REPO_OWNER}" --password-stdin
 
 echo "Construindo e publicando imagem Docker com tag ${VERSION}..."
 docker build -t "${VERSION_TAG}" .

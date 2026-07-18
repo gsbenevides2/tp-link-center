@@ -40,7 +40,7 @@ jobs:
           VERSION: ${{ needs.prepare-release.outputs.version }}
           PREV_TAG: ${{ needs.prepare-release.outputs.prev_tag }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.TOKEN_GITHUB }}
+          TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
           FULL_REPO: ${{ github.repository }}
         run: |
           chmod +x .github/workflows/release/release.sh
@@ -56,7 +56,7 @@ jobs:
       - name: Run Build and Push Docker Image
         env:
           VERSION: ${{ needs.prepare-release.outputs.version }}
-          GITHUB_TOKEN: ${{ secrets.TOKEN_GITHUB }}
+          TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
           FULL_REPO: ${{ github.repository }}
         run: |
           chmod +x .github/workflows/release/docker.sh

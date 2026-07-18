@@ -60,14 +60,17 @@ export function UnregisteredDevicesSection() {
     setLinkModalOpen(true);
   }, []);
 
-  const openCreateModal = useCallback((mac: string, ip: string, name: string, vendor: string) => {
-    setSelectedMac(mac);
-    setSelectedIp(ip);
-    setDeviceName(name);
-    setDeviceBrand(vendor);
-    setInterfaceName("");
-    setCreateModalOpen(true);
-  }, []);
+  const openCreateModal = useCallback(
+    (mac: string, ip: string, name: string, vendor: string) => {
+      setSelectedMac(mac);
+      setSelectedIp(ip);
+      setDeviceName(name);
+      setDeviceBrand(vendor);
+      setInterfaceName("");
+      setCreateModalOpen(true);
+    },
+    [],
+  );
 
   const handleLinkSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -77,7 +80,13 @@ export function UnregisteredDevicesSection() {
       try {
         await addInterface({
           deviceId: selectedDeviceId,
-          body: { name: interfaceName, mac: selectedMac, ip: selectedIp },
+          body: {
+            name: interfaceName,
+            mac: selectedMac,
+            ip: selectedIp,
+            allowList: false,
+            reservedIp: false,
+          },
         });
         setLinkModalOpen(false);
       } finally {
@@ -93,18 +102,35 @@ export function UnregisteredDevicesSection() {
       if (!deviceName || !deviceBrand || !interfaceName) return;
       setSubmitting(true);
       try {
-        const result = await addDevice({ name: deviceName, brand: deviceBrand });
+        const result = await addDevice({
+          name: deviceName,
+          brand: deviceBrand,
+        });
         const newDeviceId = (result as { id: string }).id;
         await addInterface({
           deviceId: newDeviceId,
-          body: { name: interfaceName, mac: selectedMac, ip: selectedIp },
+          body: {
+            name: interfaceName,
+            mac: selectedMac,
+            ip: selectedIp,
+            allowList: false,
+            reservedIp: false,
+          },
         });
         setCreateModalOpen(false);
       } finally {
         setSubmitting(false);
       }
     },
-    [deviceName, deviceBrand, interfaceName, selectedMac, selectedIp, addDevice, addInterface],
+    [
+      deviceName,
+      deviceBrand,
+      interfaceName,
+      selectedMac,
+      selectedIp,
+      addDevice,
+      addInterface,
+    ],
   );
 
   return (
@@ -141,7 +167,7 @@ export function UnregisteredDevicesSection() {
             ) : null}
             {isEmpty ? (
               <tr>
-                <td colSpan={6} className="text-center text-base-content/60">
+                <td colSpan={6} className="text-base-content/60 text-center">
                   Todos os dispositivos estão registrados.
                 </td>
               </tr>
@@ -170,7 +196,14 @@ export function UnregisteredDevicesSection() {
                     </button>
                     <button
                       className="btn btn-sm btn-ghost"
-                      onClick={() => openCreateModal(device.mac, device.ip, device.name, device.vendor)}
+                      onClick={() =>
+                        openCreateModal(
+                          device.mac,
+                          device.ip,
+                          device.name,
+                          device.vendor,
+                        )
+                      }
                       title="Criar novo dispositivo"
                     >
                       <VscAdd />
@@ -190,9 +223,12 @@ export function UnregisteredDevicesSection() {
       >
         <div className="max-w-100 modal-box">
           <h3 className="font-bold text-lg">Vincular a Dispositivo</h3>
-          <form className="flex flex-col gap-2 py-4" onSubmit={handleLinkSubmit}>
+          <form
+            className="flex flex-col gap-2 py-4"
+            onSubmit={handleLinkSubmit}
+          >
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium">MAC</label>
+              <label className="font-medium text-sm">MAC</label>
               <input
                 className="input input-bordered input-sm"
                 value={selectedMac}
@@ -200,7 +236,7 @@ export function UnregisteredDevicesSection() {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium">IP</label>
+              <label className="font-medium text-sm">IP</label>
               <input
                 className="input input-bordered input-sm"
                 value={selectedIp}
@@ -208,9 +244,9 @@ export function UnregisteredDevicesSection() {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium">Dispositivo</label>
+              <label className="font-medium text-sm">Dispositivo</label>
               <select
-                className="select select-bordered select-sm"
+                className="select-bordered select-sm select"
                 value={selectedDeviceId}
                 onChange={(e) => setSelectedDeviceId(e.target.value)}
                 required
@@ -226,7 +262,7 @@ export function UnregisteredDevicesSection() {
               </select>
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium">Nome da Interface</label>
+              <label className="font-medium text-sm">Nome da Interface</label>
               <input
                 className="input input-bordered input-sm"
                 placeholder="Ex: Wi-Fi, Ethernet..."
@@ -274,7 +310,7 @@ export function UnregisteredDevicesSection() {
             onSubmit={handleCreateSubmit}
           >
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium">MAC</label>
+              <label className="font-medium text-sm">MAC</label>
               <input
                 className="input input-bordered input-sm"
                 value={selectedMac}
@@ -282,7 +318,7 @@ export function UnregisteredDevicesSection() {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium">IP</label>
+              <label className="font-medium text-sm">IP</label>
               <input
                 className="input input-bordered input-sm"
                 value={selectedIp}
@@ -290,9 +326,7 @@ export function UnregisteredDevicesSection() {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium">
-                Nome do Dispositivo
-              </label>
+              <label className="font-medium text-sm">Nome do Dispositivo</label>
               <input
                 className="input input-bordered input-sm"
                 placeholder="Digite o nome do dispositivo:"
@@ -302,7 +336,7 @@ export function UnregisteredDevicesSection() {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium">
+              <label className="font-medium text-sm">
                 Fabricante do Dispositivo
               </label>
               <input
@@ -314,7 +348,7 @@ export function UnregisteredDevicesSection() {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium">Nome da Interface</label>
+              <label className="font-medium text-sm">Nome da Interface</label>
               <input
                 className="input input-bordered input-sm"
                 placeholder="Ex: Wi-Fi, Ethernet..."
