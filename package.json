@@ -1,7 +1,7 @@
 {
   "name": "tp-link-center",
   "displayName": "TP Link Center",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "private": true,
   "description": "TP Link Center is Admin Dashboard to manager my tplink routers.",
   "author": {
