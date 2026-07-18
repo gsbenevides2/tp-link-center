@@ -1,6 +1,7 @@
 import { openapi as elysiaOpenapi } from "@elysia/openapi";
 import packageJson from "@/package.json";
 import path from "node:path";
+import { scalarCss } from "@/server/scalarCss";
 
 const licenseUrl = new URL(packageJson.repository.url);
 
@@ -8,11 +9,6 @@ licenseUrl.pathname = path.posix.join(
   licenseUrl.pathname,
   "/blob/main/LICENSE",
 );
-
-const currentFilePath = import.meta.url.replace("file://", "");
-const currentFolderPath = path.parse(currentFilePath).dir;
-const filePath = path.resolve(currentFolderPath, "scalar.css");
-const scalarCss = await Bun.file(filePath).text();
 
 export const openapi = elysiaOpenapi({
   documentation: {

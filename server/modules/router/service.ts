@@ -2,15 +2,25 @@ import { RouterModel } from "./model";
 import getVendor from "mac-oui-lookup";
 import { Device } from "../devices/service";
 
-const { ROUTER_PASSWORD, ROUTER_ENPOINT } = process.env;
+const { ROUTER_PASSWORD, ROUTER_ENPOINT, LIGHTPANDA_URL } = process.env;
 
 type ConnectedDevices = RouterModel["getConnectedDevicesResponse"];
 type DhcpEntries = RouterModel["listDHCPEntryResponse"];
 
 if (!ROUTER_PASSWORD) throw new Error("Missing ROUTER_PASSWORD");
 if (!ROUTER_ENPOINT) throw new Error("Missing ROUTER_ENPOINT");
+if (!LIGHTPANDA_URL) throw new Error("Missing LIGHTPANDA_URL");
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function createWebView() {
+  return new Bun.WebView({
+    backend: {
+      type: "chrome",
+      url: LIGHTPANDA_URL!,
+    },
+  });
+}
 
 export class Router {
   static processQueue: string[] = [];
@@ -32,13 +42,14 @@ export class Router {
 
   private static async login(page: Bun.WebView) {
     await page.navigate(ROUTER_ENPOINT!);
+    await wait(200);
     const isLoggedOut = await page.evaluate<boolean>(
       `$("#pc-login-password").is(":visible")`,
     );
     if (!isLoggedOut) return;
-    await page.click("#pc-login-password");
-    await page.type(ROUTER_PASSWORD!);
-    await page.click("#pc-login-btn");
+    await page.evaluate(`$("#pc-login-password").val("${ROUTER_PASSWORD}")`);
+    await wait(100);
+    await page.evaluate(`$("#pc-login-btn").click()`);
 
     while (true) {
       await wait(100);
@@ -46,11 +57,12 @@ export class Router {
         .evaluate<boolean>(`$("#confirm-yes").is(":visible")`)
         .catch(() => false);
       if (isForcing) {
-        await page.click("#confirm-yes");
+        await page.evaluate(`$("#confirm-yes").click()`);
       }
       const isLogged = await page
         .evaluate<boolean>(`$("#topReboot").is(":visible")`)
         .catch(() => false);
+      console.log({ isLogged, isForcing });
       if (isLogged) break;
     }
   }
@@ -206,7 +218,7 @@ export class Router {
   static async getConnectedDevices(): Promise<ConnectedDevices> {
     await this.waitRelease();
     try {
-      await using page = new Bun.WebView();
+      await using page = await createWebView();
       await this.login(page);
 
       const results = await this.getConnectedEasyMeshDevices(page);
@@ -222,7 +234,7 @@ export class Router {
   static async listDHCPEntry(): Promise<DhcpEntries> {
     await this.waitRelease();
     try {
-      await using page = new Bun.WebView();
+      await using page = await createWebView();
       await this.login(page);
 
       const DEV2_DHCPV4_POOL_STATICADDR = await page.evaluate<
@@ -256,7 +268,7 @@ export class Router {
   static async addDHCPEntry(mac: string, ip: string): Promise<string> {
     await this.waitRelease();
     try {
-      await using page = new Bun.WebView();
+      await using page = await createWebView();
       await this.login(page);
 
       const DEV2_DHCPV4_POOL_STATICADDR = await page.evaluate<{
@@ -288,7 +300,7 @@ export class Router {
   static async removeDHCPEntry(id: string) {
     await this.waitRelease();
     try {
-      await using page = new Bun.WebView();
+      await using page = await createWebView();
       await this.login(page);
       await page.evaluate<void>(`(function routers(){
         return new Promise(resolve=>{
@@ -312,7 +324,7 @@ export class Router {
   static async listFirewallChains() {
     await this.waitRelease();
     try {
-      await using page = new Bun.WebView();
+      await using page = await createWebView();
       await this.login(page);
 
       const chains = await page.evaluate<
@@ -351,7 +363,7 @@ export class Router {
   static async listFirewallRules() {
     await this.waitRelease();
     try {
-      await using page = new Bun.WebView();
+      await using page = await createWebView();
       await this.login(page);
 
       const rules = await page.evaluate<
@@ -404,7 +416,7 @@ export class Router {
   }) {
     await this.waitRelease();
     try {
-      await using page = new Bun.WebView();
+      await using page = await createWebView();
       await this.login(page);
 
       const result = await page.evaluate<{
@@ -442,7 +454,7 @@ export class Router {
   static async removeFirewallRule(ruleStack: string) {
     await this.waitRelease();
     try {
-      await using page = new Bun.WebView();
+      await using page = await createWebView();
       await this.login(page);
       await page.evaluate<void>(`(function routers(){
         return new Promise((resolve, reject)=>{

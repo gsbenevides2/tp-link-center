@@ -65,7 +65,7 @@ EOF
 
 cat /tmp/changes.txt >> /tmp/prompt.txt
 
-GENERATED=$(opencode run --model openrouter/openrouter/auto "$(cat /tmp/prompt.txt)" 2>/dev/null || true)
+GENERATED=$(opencode run --model openrouter/xiaomi/mimo-v2.5 "$(cat /tmp/prompt.txt)" 2>/dev/null || true)
 
 echo "Release notes geradas (ou fallback):"
 echo "$GENERATED"

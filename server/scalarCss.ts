@@ -1,4 +1,4 @@
-.light-mode,
+export const scalarCss = `.light-mode,
 .dark-mode {
   --scalar-color-1: oklch(98.5% 0 0);
   --scalar-color-2: #ffffff;
@@ -115,3 +115,4 @@
 .scalar-mcp-layer .scalar-mcp-layer-link {
   border-color: oklch(0.709 0.12 206) !important;
 }
+`;

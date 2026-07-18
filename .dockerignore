@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+.github
+.vscode
+.env*
+.gitignore
+.dockerignore
+Dockerfile
+README.md
+LICENSE
+AGENTS.md
+tsconfig.tsbuildinfo
+eslint.config.mjs
+postcss.config.mjs
