@@ -18,7 +18,8 @@
   "keywords": [
     "TP Link",
     "Router",
-    "Dashboard"
+    "Dashboard",
+    "Devices"
   ],
   "scripts": {
     "dev": "bun --bun next dev",
