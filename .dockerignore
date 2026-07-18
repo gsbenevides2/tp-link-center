@@ -12,4 +12,3 @@ LICENSE
 AGENTS.md
 tsconfig.tsbuildinfo
 eslint.config.mjs
-postcss.config.mjs
