@@ -23,3 +23,8 @@ jobs:
 
       - name: Build
         run: bun run build
+        env: 
+          DATABASE_URL: "#"
+          ROUTER_ENPOINT: "#"
+          ROUTER_PASSWORD: "#"
+          BROWSER_URL: "#"
