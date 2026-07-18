@@ -110,6 +110,10 @@ export function useAddInterface() {
   });
 }
 
+type UpdateInterfaceBody = Parameters<
+  ReturnType<ReturnType<typeof clientSideApi.devices>["interface"]>["put"]
+>[0];
+
 export function useUpdateInterface() {
   const queryClient = useQueryClient();
 
@@ -121,7 +125,7 @@ export function useUpdateInterface() {
     }: {
       deviceId: string;
       interfaceId: string;
-      body: { name: string; mac: string; ip: string };
+      body: UpdateInterfaceBody;
     }) => {
       await clientSideApi
         .devices({ id: deviceId })
