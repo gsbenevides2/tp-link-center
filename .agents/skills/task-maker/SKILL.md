@@ -78,7 +78,11 @@ Após executar a demanda:
    bun run build   # Verifica erros de compilação
    ```
 
-### 5. Criação do Commit
+### 5. Bump da versão
+
+Ao finalizar atualize o package.json fazendo bump da minor. Ex: 0.0.1 -> 0.0.2
+
+### 6. Criação do Commit
 
 Crie um commit seguindo o padrão Conventional Commits:
 
@@ -104,7 +108,7 @@ git commit -m "feat: adicionar autenticação de usuário
 Closes #123"
 ```
 
-### 6. Criação da PR
+### 7. Criação da PR
 
 Após o commit e push:
 
@@ -145,6 +149,7 @@ Ao modificar variáveis de ambiente:
 - [ ] Banco de dados sincronizado (se necessário)
 - [ ] Lint passando
 - [ ] Build passando
+- [ ] Bump de Versão
 - [ ] Commit criado com mensagem correta
 - [ ] Push realizado
 - [ ] PR criada com descrição completa
