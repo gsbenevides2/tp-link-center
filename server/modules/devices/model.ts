@@ -40,11 +40,11 @@ export const DeviceModel = {
             description: "Whether this router is the controller.",
             example: false,
           }),
-        routerPassword: (schema) =>
-          schema.meta({
+        routerPassword: () =>
+          z.string().optional().nullable().meta({
             title: "Router Password",
-            description: "Password for router web admin (only for routers).",
-            example: "password123",
+            description: "Password for router web admin (only for routers). Never returned in API responses.",
+            example: "••••••••",
           }),
       }).extend({
         interfaces: z

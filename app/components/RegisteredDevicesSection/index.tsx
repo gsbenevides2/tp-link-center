@@ -19,6 +19,12 @@ import { EmptyMessage } from "./EmptyMessage";
 import { useAddDeviceModal } from "../AddDeviceModal";
 import { useDeviceDrawer } from "../DeviceDrawer";
 
+function getDeviceSortOrder(device: { type: string; isController: boolean }): number {
+  if (device.type === "router" && device.isController) return 0;
+  if (device.type === "router") return 1;
+  return 2;
+}
+
 export function RegisteredDevicesSection() {
   const {
     data: devices,
@@ -58,6 +64,10 @@ export function RegisteredDevicesSection() {
     return null;
   }
 
+  const sortedDevices = devices
+    ? [...devices].sort((a, b) => getDeviceSortOrder(a) - getDeviceSortOrder(b))
+    : devices;
+
   return (
     <section>
       <div className="flex justify-between items-center pb-4">
@@ -95,7 +105,7 @@ export function RegisteredDevicesSection() {
             {isLoading ? <LoadingMessage /> : null}
             {error ? <ErrorMessage /> : null}
             {isEmpty ? <EmptyMessage /> : null}
-            {devices?.map((device) => {
+            {sortedDevices?.map((device) => {
               const online = isDeviceOnline(device);
               const routerInterface = getDeviceRouterInterface(device);
               return (
@@ -104,16 +114,11 @@ export function RegisteredDevicesSection() {
                   <td>{device.name}</td>
                   <td>{device.brand}</td>
                   <td>
-                    {device.type === "router" ? (
-                      <span className="badge badge-info badge-sm">
-                        Roteador
-                        {device.isController && " (Controlador)"}
-                      </span>
-                    ) : (
-                      <span className="badge badge-ghost badge-sm">
-                        Cliente
-                      </span>
-                    )}
+                    {device.type === "router"
+                      ? device.isController
+                        ? "Roteador (Controlador)"
+                        : "Roteador (Agente)"
+                      : "Cliente"}
                   </td>
                   <td>
                     {routerInterface ? (

@@ -37,6 +37,7 @@ Create `.env` and fill in:
 |----------|---------|
 | `DATABASE_URL` | PostgreSQL connection string |
 | `BROWSER_URL` | Chrome CDP endpoint (e.g. `http://127.0.0.1:9222`) |
+| `ROUTER_PASSWORD_SECRET` | Secret key for encrypting router passwords (AES-256) |
 
 ### Install & Run
 

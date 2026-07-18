@@ -2,6 +2,10 @@ import type { DeviceModel } from "@/server/modules/devices/model";
 import { db } from "@/server/db";
 import { devices, interfaces } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
+import {
+  encryptPassword,
+  decryptPassword,
+} from "@/server/utils/crypto";
 
 export abstract class Device {
   static async get(): Promise<DeviceModel["getResponse"]> {
@@ -10,7 +14,10 @@ export abstract class Device {
         interfaces: true,
       },
     });
-    return devices;
+    return devices.map((device) => ({
+      ...device,
+      routerPassword: undefined,
+    }));
   }
   static async create(
     params: DeviceModel["createBody"],
@@ -22,7 +29,17 @@ export abstract class Device {
         .where(eq(devices.isController, true));
     }
 
-    const createdDevice = await db.insert(devices).values(params).returning();
+    const encryptedPassword = params.routerPassword
+      ? encryptPassword(params.routerPassword)
+      : null;
+
+    const createdDevice = await db
+      .insert(devices)
+      .values({
+        ...params,
+        routerPassword: encryptedPassword,
+      })
+      .returning();
     const id = createdDevice.at(0)?.id;
     if (!id) throw Error("Id not generated");
     return {
@@ -44,7 +61,18 @@ export abstract class Device {
         .where(eq(devices.isController, true));
     }
 
-    await db.update(devices).set(body).where(eq(devices.id, params.id));
+    const encryptedPassword = body.routerPassword
+      ? encryptPassword(body.routerPassword)
+      : body.routerPassword === null
+        ? null
+        : undefined;
+
+    const updateData: Record<string, unknown> = { ...body };
+    if (encryptedPassword !== undefined) {
+      updateData.routerPassword = encryptedPassword;
+    }
+
+    await db.update(devices).set(updateData).where(eq(devices.id, params.id));
   }
   static async createInterface(
     deviceId: string,
@@ -76,10 +104,30 @@ export abstract class Device {
     params: DeviceModel["updateInterfaceParams"],
     body: DeviceModel["updateInterfaceBody"],
   ) {
-    await db
-      .update(interfaces)
-      .set(body)
-      .where(eq(interfaces.id, params.interfaceId));
+    const device = await db.query.devices.findFirst({
+      where: { id: params.id },
+    });
+
+    if (device?.type === "router" && device.isController) {
+      throw new Error("Controller router interface cannot be edited");
+    }
+
+    if (device?.type === "router") {
+      const allowedFields: Record<string, unknown> = {};
+      if (body.ip !== undefined) allowedFields.ip = body.ip;
+      if (body.reservedIp !== undefined)
+        allowedFields.reservedIp = body.reservedIp;
+
+      await db
+        .update(interfaces)
+        .set(allowedFields)
+        .where(eq(interfaces.id, params.interfaceId));
+    } else {
+      await db
+        .update(interfaces)
+        .set(body)
+        .where(eq(interfaces.id, params.interfaceId));
+    }
   }
   static async deleteInterface(
     params: DeviceModel["deleteInterfaceParams"],
@@ -123,7 +171,7 @@ export abstract class Device {
       id: controller.id,
       name: controller.name,
       ip: controller.interfaces[0].ip,
-      password: controller.routerPassword,
+      password: decryptPassword(controller.routerPassword),
     };
   }
 }

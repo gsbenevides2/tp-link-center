@@ -19,7 +19,12 @@ import { getRegexOfZod } from "@/app/utils/getRegexOfZod";
 export type Interface = Device["interfaces"][number];
 
 interface Context {
-  open: (deviceId: string, interfaceToEdit?: Interface, deviceType?: "router" | "client") => void;
+  open: (
+    deviceId: string,
+    interfaceToEdit?: Interface,
+    deviceType?: "router" | "client",
+    isController?: boolean,
+  ) => void;
   close: () => void;
 }
 
@@ -37,6 +42,7 @@ export function AddInterfaceModal() {
   const [currentDeviceId, setCurrentDeviceId] = useState<string>();
   const [editingInterface, setEditingInterface] = useState<Interface>();
   const [currentDeviceType, setCurrentDeviceType] = useState<"router" | "client">("client");
+  const [currentIsController, setCurrentIsController] = useState(false);
 
   const isEditing = Boolean(editingInterface);
 
@@ -48,14 +54,21 @@ export function AddInterfaceModal() {
     setCurrentDeviceId(undefined);
     setEditingInterface(undefined);
     setCurrentDeviceType("client");
+    setCurrentIsController(false);
   }, [dialogRef, formRef]);
 
   const openModal = useCallback(
-    (deviceId: string, interfaceToEdit?: Interface, deviceType?: "router" | "client") => {
+    (
+      deviceId: string,
+      interfaceToEdit?: Interface,
+      deviceType?: "router" | "client",
+      isController?: boolean,
+    ) => {
       if (!dialogRef.current) return;
       setCurrentDeviceId(deviceId);
       setEditingInterface(interfaceToEdit);
       setCurrentDeviceType(deviceType ?? "client");
+      setCurrentIsController(isController ?? false);
       dialogRef.current.open = true;
     },
     [dialogRef],
@@ -68,13 +81,37 @@ export function AddInterfaceModal() {
       const currentForm = event.currentTarget;
       const data = new FormData(currentForm);
       const isRouter = currentDeviceType === "router";
-      const body = {
-        name: data.get("Nome da Interface")?.toString() ?? "",
-        mac: data.get("Endereço MAC")?.toString() ?? "",
-        ip: data.get("Endereço IP")?.toString() ?? "",
-        reservedIp: isRouter ? false : data.get("IP Reservado") === "on",
-        allowList: isRouter ? false : data.get("Interface na Allow List") === "on",
+
+      let body: {
+        name: string;
+        mac: string;
+        ip: string;
+        reservedIp: boolean;
+        allowList: boolean;
       };
+
+      if (isRouter && editingInterface) {
+        body = {
+          name: editingInterface.name,
+          mac: editingInterface.mac,
+          ip: data.get("Endereço IP")?.toString() ?? editingInterface.ip,
+          reservedIp:
+            data.get("IP Reservado") === "on" || editingInterface.reservedIp,
+          allowList: false,
+        };
+      } else {
+        body = {
+          name: data.get("Nome da Interface")?.toString() ?? "",
+          mac: data.get("Endereço MAC")?.toString() ?? "",
+          ip: data.get("Endereço IP")?.toString() ?? "",
+          reservedIp: isRouter
+            ? false
+            : data.get("IP Reservado") === "on",
+          allowList: isRouter
+            ? false
+            : data.get("Interface na Allow List") === "on",
+        };
+      }
 
       if (editingInterface) {
         await updateInterface({
@@ -87,7 +124,14 @@ export function AddInterfaceModal() {
       }
       closeModal();
     },
-    [closeModal, addInterface, updateInterface, currentDeviceId, editingInterface, currentDeviceType],
+    [
+      closeModal,
+      addInterface,
+      updateInterface,
+      currentDeviceId,
+      editingInterface,
+      currentDeviceType,
+    ],
   );
 
   useLayoutEffect(() => {
@@ -98,6 +142,8 @@ export function AddInterfaceModal() {
   }, [closeModal, openModal]);
 
   const isRouter = currentDeviceType === "router";
+  const isController = currentIsController;
+  const isEditingRouter = isRouter && isEditing;
 
   return (
     <dialog ref={dialogRef} className="modal" onClose={closeModal}>
@@ -110,21 +156,25 @@ export function AddInterfaceModal() {
           onSubmit={handleSubmit}
           ref={formRef}
         >
-          <Input
-            required
-            label="Nome da Interface"
-            placeholder="Digite o nome da interface:"
-            errorMessage="Preenchimento Obrigatório."
-            defaultValue={editingInterface?.name}
-          />
-          <Input
-            required
-            label="Endereço MAC"
-            placeholder="Digite o endereço MAC:"
-            errorMessage="Preenchimento Obrigatório. E o MAC Precisa ser válido."
-            pattern={getRegexOfZod(z.mac())}
-            defaultValue={editingInterface?.mac}
-          />
+          {!isEditingRouter && (
+            <Input
+              required
+              label="Nome da Interface"
+              placeholder="Digite o nome da interface:"
+              errorMessage="Preenchimento Obrigatório."
+              defaultValue={editingInterface?.name}
+            />
+          )}
+          {!isEditingRouter && (
+            <Input
+              required
+              label="Endereço MAC"
+              placeholder="Digite o endereço MAC:"
+              errorMessage="Preenchimento Obrigatório. E o MAC Precisa ser válido."
+              pattern={getRegexOfZod(z.mac())}
+              defaultValue={editingInterface?.mac}
+            />
+          )}
           <Input
             required
             label="Endereço IP"
@@ -133,6 +183,17 @@ export function AddInterfaceModal() {
             pattern={getRegexOfZod(z.ipv4())}
             defaultValue={editingInterface?.ip}
           />
+          {isRouter && !isController && (
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                name="IP Reservado"
+                className="checkbox checkbox-sm"
+                defaultChecked={editingInterface?.reservedIp}
+              />
+              <span className="label-text">IP Reservado</span>
+            </label>
+          )}
           {!isRouter && (
             <div className="flex gap-4">
               <label className="flex items-center gap-2 cursor-pointer">

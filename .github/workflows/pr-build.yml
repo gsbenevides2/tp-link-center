@@ -25,6 +25,5 @@ jobs:
         run: bun run build
         env: 
           DATABASE_URL: "#"
-          ROUTER_ENDPOINT: "#"
-          ROUTER_PASSWORD: "#"
+          ROUTER_PASSWORD_SECRET: "#"
           BROWSER_URL: "#"

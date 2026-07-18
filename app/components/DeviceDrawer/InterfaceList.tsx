@@ -11,16 +11,109 @@ export type Interface = Device["interfaces"][number];
 interface Props {
   deviceId: string;
   deviceType: "router" | "client";
+  isController: boolean;
   interfaces: Interface[];
   onlineMacs: Set<string>;
   macToRouterInterface: Map<string, string>;
 }
 
-export function InterfaceList({ interfaces, deviceId, deviceType, onlineMacs, macToRouterInterface }: Props) {
+export function InterfaceList({
+  interfaces,
+  deviceId,
+  deviceType,
+  isController,
+  onlineMacs,
+  macToRouterInterface,
+}: Props) {
   const addInterfaceModal = useAddInterfaceModal();
   const deleteInterfaceModal = useDeleteInterfaceModal(deviceId);
   const hasInterfaces = interfaces.length > 0;
   const isRouter = deviceType === "router";
+
+  if (isRouter) {
+    const iface = interfaces[0];
+    if (!iface) {
+      return (
+        <div className="mb-4">
+          <h3 className="font-bold text-base mb-2">Interface</h3>
+          <p className="text-base-content/60">
+            Nenhuma interface configurada.
+          </p>
+          {!isController && (
+            <button
+              className="btn btn-sm btn-primary mt-2"
+              onClick={() =>
+                addInterfaceModal?.open(deviceId, undefined, deviceType, isController)
+              }
+            >
+              Adicionar Interface
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    const isOnline = onlineMacs.has(iface.mac.toLowerCase());
+
+    return (
+      <div className="mb-4">
+        <h3 className="font-bold text-base mb-2">Interface</h3>
+        <div className="border border-base-content/5 rounded-box p-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <span className="text-xs text-base-content/60">Nome</span>
+              <p className="font-medium">{iface.name}</p>
+            </div>
+            <div>
+              <span className="text-xs text-base-content/60">MAC</span>
+              <p className="font-medium">{iface.mac}</p>
+            </div>
+            <div>
+              <span className="text-xs text-base-content/60">IP</span>
+              <p className="font-medium">{iface.ip}</p>
+            </div>
+            <div>
+              <span className="text-xs text-base-content/60">Status</span>
+              <p>
+                <span
+                  className={`badge badge-sm ${isOnline ? "badge-success" : "badge-ghost"}`}
+                >
+                  {isOnline ? "Online" : "Offline"}
+                </span>
+              </p>
+            </div>
+            {!isController && (
+              <div>
+                <span className="text-xs text-base-content/60">
+                  IP Reservado
+                </span>
+                <p className="font-medium">
+                  {iface.reservedIp ? "Sim" : "Não"}
+                </p>
+              </div>
+            )}
+          </div>
+          {!isController && (
+            <div className="flex gap-2 mt-4">
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={() =>
+                  addInterfaceModal?.open(deviceId, iface, deviceType, isController)
+                }
+              >
+                <VscEdit /> Editar
+              </button>
+            </div>
+          )}
+          {isController && (
+            <p className="text-xs text-base-content/50 mt-4">
+              Interface do controlador não pode ser editada.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -28,7 +121,7 @@ export function InterfaceList({ interfaces, deviceId, deviceType, onlineMacs, ma
         <h3 className="font-bold text-base">Interfaces</h3>
         <button
           className="btn btn-sm btn-ghost"
-          onClick={() => addInterfaceModal?.open(deviceId, undefined, deviceType)}
+          onClick={() => addInterfaceModal?.open(deviceId, undefined, deviceType, isController)}
         >
           <VscAddCompact />
         </button>
@@ -43,15 +136,17 @@ export function InterfaceList({ interfaces, deviceId, deviceType, onlineMacs, ma
                 <th>IP</th>
                 <th>Roteador</th>
                 <th>Status</th>
-                {!isRouter && <th>IP Reservado</th>}
-                {!isRouter && <th>Allow List</th>}
+                <th>IP Reservado</th>
+                <th>Allow List</th>
                 <th className="w-24">Ações</th>
               </tr>
             </thead>
             <tbody>
               {interfaces.map((iface) => {
                 const isOnline = onlineMacs.has(iface.mac.toLowerCase());
-                const routerInterface = macToRouterInterface.get(iface.mac.toLowerCase());
+                const routerInterface = macToRouterInterface.get(
+                  iface.mac.toLowerCase(),
+                );
                 return (
                   <tr key={iface.id}>
                     <td>{iface.name}</td>
@@ -71,29 +166,38 @@ export function InterfaceList({ interfaces, deviceId, deviceType, onlineMacs, ma
                         {isOnline ? "Online" : "Offline"}
                       </span>
                     </td>
-                    {!isRouter && (
-                      <td>
-                        {iface.reservedIp ? (
-                          <span className="badge badge-sm badge-info">Sim</span>
-                        ) : (
-                          <span className="text-xs text-base-content/50">Não</span>
-                        )}
-                      </td>
-                    )}
-                    {!isRouter && (
-                      <td>
-                        {iface.allowList ? (
-                          <span className="badge badge-sm badge-success">Sim</span>
-                        ) : (
-                          <span className="text-xs text-base-content/50">Não</span>
-                        )}
-                      </td>
-                    )}
+                    <td>
+                      {iface.reservedIp ? (
+                        <span className="badge badge-sm badge-info">Sim</span>
+                      ) : (
+                        <span className="text-xs text-base-content/50">
+                          Não
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      {iface.allowList ? (
+                        <span className="badge badge-sm badge-success">
+                          Sim
+                        </span>
+                      ) : (
+                        <span className="text-xs text-base-content/50">
+                          Não
+                        </span>
+                      )}
+                    </td>
                     <td className="w-24">
                       <div className="flex gap-1">
                         <button
                           className="btn btn-sm btn-ghost"
-                          onClick={() => addInterfaceModal?.open(deviceId, iface, deviceType)}
+                          onClick={() =>
+                            addInterfaceModal?.open(
+                              deviceId,
+                              iface,
+                              deviceType,
+                              isController,
+                            )
+                          }
                         >
                           <VscEdit />
                         </button>

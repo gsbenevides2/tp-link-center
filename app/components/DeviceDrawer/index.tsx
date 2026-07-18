@@ -65,6 +65,7 @@ export function DeviceDrawer() {
             <InterfaceList
               deviceId={selectedDevice.id}
               deviceType={selectedDevice.type}
+              isController={selectedDevice.isController}
               interfaces={selectedDevice.interfaces}
               onlineMacs={onlineMacs}
               macToRouterInterface={macToRouterInterface}
