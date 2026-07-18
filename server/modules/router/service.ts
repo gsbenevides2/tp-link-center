@@ -95,6 +95,7 @@ export class Router {
         X_TP_IPAddress: string;
         backhaulLinkType: string;
         X_TP_HostName: string;
+        X_TP_Active: string;
       }>
     >(
       page,
@@ -121,7 +122,7 @@ export class Router {
       }
     }
     return await Promise.all(
-      DEV2_WIFI_APDEV.map(async (item) => ({
+      DEV2_WIFI_APDEV.filter((item) => item.X_TP_Active === "1").map(async (item) => ({
         ip: item.X_TP_IPAddress,
         mac: item.MACAddress,
         name:
@@ -143,6 +144,7 @@ export class Router {
         X_TP_RadioMac: string;
         X_TP_IPAddress: string;
         MACAddress: string;
+        active: string;
       }>
     >(
       page,
@@ -187,7 +189,7 @@ export class Router {
     }
 
     return await Promise.all(
-      DEV2_WIFI_APDEV_ASSOCDEV.map(async (item) => ({
+      DEV2_WIFI_APDEV_ASSOCDEV.filter((item) => item.active === "1").map(async (item) => ({
         ip: item.X_TP_IPAddress,
         mac: item.MACAddress,
         name:
@@ -208,6 +210,7 @@ export class Router {
         IPAddress: string;
         X_TP_HostName: string;
         MACAddress: string;
+        active: string;
       }>
     >(
       page,
@@ -225,7 +228,7 @@ export class Router {
     );
 
     return await Promise.all(
-      DEV2_WIFI_APDEV_ETHASSOCDEV.map(async (i) => ({
+      DEV2_WIFI_APDEV_ETHASSOCDEV.filter((i) => i.active === "1").map(async (i) => ({
         ip: i.IPAddress,
         mac: i.MACAddress,
         name:
