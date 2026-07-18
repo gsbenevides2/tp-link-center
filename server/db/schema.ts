@@ -1,6 +1,11 @@
 import { defineRelations, sql } from "drizzle-orm";
 import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
+export const settings = pgTable("settings", {
+  key: text().primaryKey(),
+  value: text().notNull(),
+});
+
 export const devices = pgTable("devices", {
   id: text()
     .primaryKey()
@@ -43,7 +48,7 @@ export const onlineDevicesChecks = pgTable("onlineDeviceChecks", {
 });
 
 export const relations = defineRelations(
-  { devices, interfaces, onlineChecks, onlineDevicesChecks },
+  { devices, interfaces, onlineChecks, onlineDevicesChecks, settings },
   (r) => ({
     interfaces: {
       device: r.one.devices({
