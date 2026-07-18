@@ -8,13 +8,24 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - ROUTER_ENPOINT=${ROUTER_ENPOINT}
       - ROUTER_PASSWORD=${ROUTER_PASSWORD}
-      - LIGHTPANDA_URL=http://lightpanda:9222
+      - BROWSER_URL=http://172.30.0.20:9222
     depends_on:
-      - lightpanda
+      - chrome
+    networks:
+      rede_interna:
+        ipv4_address: 172.30.0.10
 
-  lightpanda:
-    image: lightpanda/browser:nightly
+  chrome:
+    hostname: chrome
+    image: chromedp/headless-shell
     restart: unless-stopped
-    command: lightpanda serve --host 0.0.0.0 --port 9222
-    ports:
-      - '127.0.0.1:9222:9222'
+    networks:
+      rede_interna:
+        ipv4_address: 172.30.0.20
+networks:
+  rede_interna:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+          gateway: 172.30.0.1

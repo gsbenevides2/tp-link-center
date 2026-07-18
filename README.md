@@ -17,7 +17,7 @@ Admin dashboard to manage TP-Link routers, monitor connected devices, and track 
 - **Frontend:** Next.js 16 (App Router) + React 19 + Tailwind CSS 4 + DaisyUI
 - **Backend:** Elysia (API framework, proxied via Next.js catch-all route)
 - **Database:** PostgreSQL + Drizzle ORM
-- **Browser:** [Lightpanda](https://hub.docker.com/r/lightpanda/browser) (headless browser via CDP)
+- **Browser:** Chrome CDP: headless browser via CDP
 - **API Client:** Elysia Eden (type-safe)
 
 ## Getting Started
@@ -27,7 +27,6 @@ Admin dashboard to manage TP-Link routers, monitor connected devices, and track 
 - Bun
 - PostgreSQL
 - TP-Link router with web admin interface
-- [Lightpanda](https://hub.docker.com/r/lightpanda/browser) browser (run via Docker or natively)
 
 ### Environment Variables
 
@@ -38,7 +37,7 @@ Create `.env` and fill in:
 | `DATABASE_URL` | PostgreSQL connection string |
 | `ROUTER_ENPOINT` | TP-Link router web admin URL |
 | `ROUTER_PASSWORD` | TP-Link router login password |
-| `LIGHTPANDA_URL` | Lightpanda CDP endpoint (e.g. `http://127.0.0.1:9222`) |
+| `BROWSER_URL` | Chrome CDP endpoint (e.g. `http://127.0.0.1:9222`) |
 
 ### Install & Run
 
@@ -52,10 +51,10 @@ This starts both the app and Lightpanda browser. The app will be available at `h
 
 #### Manual setup
 
-Start Lightpanda:
+Start Chrome CDP:
 
 ```bash
-docker run -d --name lightpanda -p 127.0.0.1:9222:9222 lightpanda/browser:nightly lightpanda serve --host 0.0.0.0 --port 9222
+chromium --remote-debugging-port=9222
 ```
 
 Install and run the app:

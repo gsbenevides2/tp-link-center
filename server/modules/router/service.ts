@@ -1,25 +1,34 @@
+import puppeteer from "puppeteer-core";
 import { RouterModel } from "./model";
 import getVendor from "mac-oui-lookup";
 import { Device } from "../devices/service";
 
-const { ROUTER_PASSWORD, ROUTER_ENPOINT, LIGHTPANDA_URL } = process.env;
+const { ROUTER_PASSWORD, ROUTER_ENPOINT, BROWSER_URL } = process.env;
 
 type ConnectedDevices = RouterModel["getConnectedDevicesResponse"];
 type DhcpEntries = RouterModel["listDHCPEntryResponse"];
 
 if (!ROUTER_PASSWORD) throw new Error("Missing ROUTER_PASSWORD");
 if (!ROUTER_ENPOINT) throw new Error("Missing ROUTER_ENPOINT");
-if (!LIGHTPANDA_URL) throw new Error("Missing LIGHTPANDA_URL");
+if (!BROWSER_URL) throw new Error("Missing BROWSER_URL");
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function createWebView() {
-  return new Bun.WebView({
-    backend: {
-      type: "chrome",
-      url: LIGHTPANDA_URL!,
-    },
+async function createPage() {
+  const browser = await puppeteer.connect({
+    browserURL: BROWSER_URL!,
   });
+  const page = await browser.newPage();
+  return { browser, page };
+}
+
+// puppeteer's string overload constrains T to unknown[], so we cast
+async function evaluate<T>(
+  page: import("puppeteer-core").Page,
+  script: string,
+): Promise<T> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return page.evaluate(script) as any as Promise<T>;
 }
 
 export class Router {
@@ -40,29 +49,31 @@ export class Router {
     this.processQueue.shift();
   }
 
-  private static async login(page: Bun.WebView) {
-    await page.navigate(ROUTER_ENPOINT!);
+  private static async login(page: import("puppeteer-core").Page) {
+    await page.goto(ROUTER_ENPOINT!);
     await wait(200);
-    const isLoggedOut = await page.evaluate<boolean>(
+    const isLoggedOut = await evaluate<boolean>(
+      page,
       `$("#pc-login-password").is(":visible")`,
     );
     if (!isLoggedOut) return;
-    await page.evaluate(`$("#pc-login-password").val("${ROUTER_PASSWORD}")`);
+    await evaluate(page, `$("#pc-login-password").val("${ROUTER_PASSWORD}")`);
     await wait(100);
-    await page.evaluate(`$("#pc-login-btn").click()`);
+    await evaluate(page, `$("#pc-login-btn").click()`);
 
     while (true) {
       await wait(100);
-      const isForcing = await page
-        .evaluate<boolean>(`$("#confirm-yes").is(":visible")`)
-        .catch(() => false);
+      const isForcing = await evaluate<boolean>(
+        page,
+        `$("#confirm-yes").is(":visible")`,
+      ).catch(() => false);
       if (isForcing) {
-        await page.evaluate(`$("#confirm-yes").click()`);
+        await evaluate(page, `$("#confirm-yes").click()`);
       }
-      const isLogged = await page
-        .evaluate<boolean>(`$("#topReboot").is(":visible")`)
-        .catch(() => false);
-      console.log({ isLogged, isForcing });
+      const isLogged = await evaluate<boolean>(
+        page,
+        `$("#topReboot").is(":visible")`,
+      ).catch(() => false);
       if (isLogged) break;
     }
   }
@@ -76,16 +87,18 @@ export class Router {
   }
 
   private static async getConnectedEasyMeshDevices(
-    page: Bun.WebView,
+    page: import("puppeteer-core").Page,
   ): Promise<ConnectedDevices> {
-    const DEV2_WIFI_APDEV = await page.evaluate<
+    const DEV2_WIFI_APDEV = await evaluate<
       Array<{
         MACAddress: string;
         X_TP_IPAddress: string;
         backhaulLinkType: string;
         X_TP_HostName: string;
       }>
-    >(`(function routers(){
+    >(
+      page,
+      `(function routers(){
         return new Promise(resolve=>{
             $.dm.getList({
                 oid: "DEV2_WIFI_APDEV",
@@ -95,7 +108,8 @@ export class Router {
                 }
             })
             })
-        })()`);
+        })()`,
+    );
 
     function processBackLinkType(type: string) {
       if (type === "Ethernet") {
@@ -121,16 +135,18 @@ export class Router {
   }
 
   private static async getConnectedWifiDevices(
-    page: Bun.WebView,
+    page: import("puppeteer-core").Page,
   ): Promise<ConnectedDevices> {
-    const DEV2_WIFI_APDEV_ASSOCDEV = await page.evaluate<
+    const DEV2_WIFI_APDEV_ASSOCDEV = await evaluate<
       Array<{
         X_TP_HostName: string;
         X_TP_RadioMac: string;
         X_TP_IPAddress: string;
         MACAddress: string;
       }>
-    >(`(function routers(){
+    >(
+      page,
+      `(function routers(){
         return new Promise(resolve=>{
             $.dm.getList({
                 oid: "DEV2_WIFI_APDEV_ASSOCDEV",
@@ -140,14 +156,17 @@ export class Router {
                 }
             })
             })
-        })()`);
-    const DEV2_WIFI_APDEV_RADIO = await page.evaluate<
+        })()`,
+    );
+    const DEV2_WIFI_APDEV_RADIO = await evaluate<
       Array<{
         channel: string;
         operatingFrequencyBand: string;
         MACAddress: string;
       }>
-    >(`(function routers(){
+    >(
+      page,
+      `(function routers(){
         return new Promise(resolve=>{
             $.dm.getList({
                 oid: "DEV2_WIFI_APDEV_RADIO",
@@ -157,7 +176,8 @@ export class Router {
                 }
             })
             })
-        })()`);
+        })()`,
+    );
     function getRouterInterface(radioMac: string) {
       const data = DEV2_WIFI_APDEV_RADIO.find(
         (item) => item.MACAddress === radioMac,
@@ -181,15 +201,17 @@ export class Router {
   }
 
   private static async getConnectedWiredDevices(
-    page: Bun.WebView,
+    page: import("puppeteer-core").Page,
   ): Promise<ConnectedDevices> {
-    const DEV2_WIFI_APDEV_ETHASSOCDEV = await page.evaluate<
+    const DEV2_WIFI_APDEV_ETHASSOCDEV = await evaluate<
       Array<{
         IPAddress: string;
         X_TP_HostName: string;
         MACAddress: string;
       }>
-    >(`(function routers(){
+    >(
+      page,
+      `(function routers(){
         return new Promise(resolve=>{
             $.dm.getList({
                 oid: "DEV2_WIFI_APDEV_ETHASSOCDEV",
@@ -199,7 +221,8 @@ export class Router {
                 }
             })
             })
-        })()`);
+        })()`,
+    );
 
     return await Promise.all(
       DEV2_WIFI_APDEV_ETHASSOCDEV.map(async (i) => ({
@@ -217,33 +240,35 @@ export class Router {
 
   static async getConnectedDevices(): Promise<ConnectedDevices> {
     await this.waitRelease();
+    const { page } = await createPage();
     try {
-      await using page = await createWebView();
       await this.login(page);
 
       const results = await this.getConnectedEasyMeshDevices(page);
       results.push(...(await this.getConnectedWifiDevices(page)));
       results.push(...(await this.getConnectedWiredDevices(page)));
-      page.close();
-      return results;
+      return results.filter((result) => result.ip !== "");
     } finally {
+      await page.close();
       await this.release();
     }
   }
 
   static async listDHCPEntry(): Promise<DhcpEntries> {
     await this.waitRelease();
+    const { page } = await createPage();
     try {
-      await using page = await createWebView();
       await this.login(page);
 
-      const DEV2_DHCPV4_POOL_STATICADDR = await page.evaluate<
+      const DEV2_DHCPV4_POOL_STATICADDR = await evaluate<
         Array<{
           yiaddr: string;
           chaddr: string;
           stack: string;
         }>
-      >(`(function routers(){
+      >(
+        page,
+        `(function routers(){
         return new Promise(resolve=>{
             $.dm.getList({
                 oid: "DEV2_DHCPV4_POOL_STATICADDR",
@@ -253,27 +278,31 @@ export class Router {
                 }
             })
             })
-        })()`);
-      page.close();
+        })()`,
+      );
       return DEV2_DHCPV4_POOL_STATICADDR.map((e) => ({
         ip: e.yiaddr,
         mac: e.chaddr,
         entryId: e.stack,
       }));
     } finally {
+      await page.close();
+
       await this.release();
     }
   }
 
   static async addDHCPEntry(mac: string, ip: string): Promise<string> {
     await this.waitRelease();
+    const { page } = await createPage();
     try {
-      await using page = await createWebView();
       await this.login(page);
 
-      const DEV2_DHCPV4_POOL_STATICADDR = await page.evaluate<{
+      const DEV2_DHCPV4_POOL_STATICADDR = await evaluate<{
         stack: string;
-      }>(`(function routers(){
+      }>(
+        page,
+        `(function routers(){
         return new Promise(resolve=>{
             $.dm.add({
                 oid: "DEV2_DHCPV4_POOL_STATICADDR",
@@ -288,21 +317,25 @@ export class Router {
                 }
             })
             })
-        })()`);
+        })()`,
+      );
 
-      page.close();
       return DEV2_DHCPV4_POOL_STATICADDR.stack;
     } finally {
+      await page.close();
+
       await this.release();
     }
   }
 
   static async removeDHCPEntry(id: string) {
     await this.waitRelease();
+    const { page } = await createPage();
     try {
-      await using page = await createWebView();
       await this.login(page);
-      await page.evaluate<void>(`(function routers(){
+      await evaluate<void>(
+        page,
+        `(function routers(){
         return new Promise(resolve=>{
             $.dm.del({
                 oid: "DEV2_DHCPV4_POOL_STATICADDR",
@@ -314,27 +347,31 @@ export class Router {
                 }
             })
             })
-        })()`);
-      page.close();
+        })()`,
+      );
     } finally {
+      await page.close();
+
       await this.release();
     }
   }
 
   static async listFirewallChains() {
     await this.waitRelease();
+    const { page } = await createPage();
     try {
-      await using page = await createWebView();
       await this.login(page);
 
-      const chains = await page.evaluate<
+      const chains = await evaluate<
         Array<{
           name: string;
           enable: string;
           ruleNumberOfEntries: string;
           stack: string;
         }>
-      >(`(function routers(){
+      >(
+        page,
+        `(function routers(){
         return new Promise((resolve, reject)=>{
             $.dm.getList({
                 oid: "DEV2_FW_CHAIN",
@@ -346,9 +383,9 @@ export class Router {
                 }
             })
             })
-        })()`);
+        })()`,
+      );
 
-      page.close();
       return chains.map((c) => ({
         name: c.name,
         enable: c.enable,
@@ -356,17 +393,19 @@ export class Router {
         stack: c.stack,
       }));
     } finally {
+      await page.close();
+
       await this.release();
     }
   }
 
   static async listFirewallRules() {
     await this.waitRelease();
+    const { page } = await createPage();
     try {
-      await using page = await createWebView();
       await this.login(page);
 
-      const rules = await page.evaluate<
+      const rules = await evaluate<
         Array<{
           ruleName: string;
           ruleType: string;
@@ -377,7 +416,9 @@ export class Router {
           enable: string;
           stack: string;
         }>
-      >(`(function routers(){
+      >(
+        page,
+        `(function routers(){
         return new Promise((resolve, reject)=>{
             $.dm.getList({
                 oid: "DEV2_FW_CHAIN_RULE",
@@ -398,11 +439,13 @@ export class Router {
                 }
             })
             })
-        })()`);
+        })()`,
+      );
 
-      page.close();
       return rules;
     } finally {
+      await page.close();
+
       await this.release();
     }
   }
@@ -415,13 +458,15 @@ export class Router {
     target?: string;
   }) {
     await this.waitRelease();
+    const { page } = await createPage();
     try {
-      await using page = await createWebView();
       await this.login(page);
 
-      const result = await page.evaluate<{
+      const result = await evaluate<{
         stack: string;
-      }>(`(function routers(){
+      }>(
+        page,
+        `(function routers(){
         return new Promise((resolve, reject)=>{
             $.dm.add({
                 oid: "DEV2_FW_CHAIN_RULE",
@@ -442,21 +487,25 @@ export class Router {
                 }
             })
             })
-        })()`);
+        })()`,
+      );
 
-      page.close();
       return result.stack;
     } finally {
+      await page.close();
+
       await this.release();
     }
   }
 
   static async removeFirewallRule(ruleStack: string) {
     await this.waitRelease();
+    const { page } = await createPage();
     try {
-      await using page = await createWebView();
       await this.login(page);
-      await page.evaluate<void>(`(function routers(){
+      await evaluate<void>(
+        page,
+        `(function routers(){
         return new Promise((resolve, reject)=>{
             $.dm.del({
                 oid: "DEV2_FW_CHAIN_RULE",
@@ -470,9 +519,11 @@ export class Router {
                 }
             })
             })
-        })()`);
-      page.close();
+        })()`,
+      );
     } finally {
+      await page.close();
+
       await this.release();
     }
   }
