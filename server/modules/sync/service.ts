@@ -37,15 +37,15 @@ export class Sync {
       },
     });
 
-    const clientInterfaces = dbInterfaces.filter(
-      (i) => i.device?.type === "client",
+    const interfacesToSync = dbInterfaces.filter(
+      (i) =>
+        i.device?.type === "client" ||
+        (i.device?.type === "router" && i.device.isController),
     );
 
     const routerEntries = await Router.listDHCPEntry();
 
-    const dbMacs = new Set(
-      clientInterfaces.map((i) => normalizeMac(i.mac)),
-    );
+    const dbMacs = new Set(interfacesToSync.map((i) => normalizeMac(i.mac)));
     const routerMacToEntry = new Map(
       routerEntries.map((e) => [normalizeMac(e.mac), e]),
     );
@@ -64,7 +64,7 @@ export class Sync {
       }
     }
 
-    for (const iface of clientInterfaces) {
+    for (const iface of interfacesToSync) {
       const normalizedMac = normalizeMac(iface.mac);
       if (!routerMacToEntry.has(normalizedMac)) {
         try {
@@ -116,9 +116,7 @@ export class Sync {
       (r) => r.stack[0] === accessChain.stack[0],
     );
 
-    const dbMacs = new Set(
-      clientInterfaces.map((i) => normalizeMac(i.mac)),
-    );
+    const dbMacs = new Set(clientInterfaces.map((i) => normalizeMac(i.mac)));
     const routerMacToRule = new Map(
       routerRules.map((r) => [normalizeMac(r.sourceMAC), r]),
     );

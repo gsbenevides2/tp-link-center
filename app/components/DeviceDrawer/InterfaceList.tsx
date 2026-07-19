@@ -1,8 +1,5 @@
 import { VscAddCompact, VscEdit, VscTrash } from "react-icons/vsc";
-import {
-  Device,
-  DeviceType,
-} from "../RegisteredDevicesSection/useDevices";
+import { Device, DeviceType } from "../RegisteredDevicesSection/useDevices";
 import { useAddInterfaceModal } from "../AddInterfaceModal";
 import {
   DeleteInterfaceModal,
@@ -38,14 +35,17 @@ export function InterfaceList({
     if (!iface) {
       return (
         <div className="mb-4">
-          <h3 className="font-bold text-base mb-2">Interface</h3>
-          <p className="text-base-content/60">
-            Nenhuma interface configurada.
-          </p>
+          <h3 className="mb-2 font-bold text-base">Interface</h3>
+          <p className="text-base-content/60">Nenhuma interface configurada.</p>
           <button
-            className="btn btn-sm btn-primary mt-2"
+            className="mt-2 btn btn-sm btn-primary"
             onClick={() =>
-              addInterfaceModal?.open(deviceId, undefined, deviceType, isController)
+              addInterfaceModal?.open(
+                deviceId,
+                undefined,
+                deviceType,
+                isController,
+              )
             }
           >
             Adicionar Interface
@@ -58,9 +58,9 @@ export function InterfaceList({
 
     return (
       <div className="mb-4">
-        <h3 className="font-bold text-base mb-2">Interface</h3>
-        <div className="border border-base-content/5 rounded-box p-4">
-          <div className="grid grid-cols-2 gap-4">
+        <h3 className="mb-2 font-bold text-base">Interface</h3>
+        <div className="p-4 border border-base-content/5 rounded-box">
+          <div className="gap-4 grid grid-cols-2">
             <div>
               <span className="text-xs text-base-content/60">Nome</span>
               <p className="font-medium">{iface.name}</p>
@@ -77,7 +77,7 @@ export function InterfaceList({
               <span className="text-xs text-base-content/60">Status</span>
               <p>
                 <span
-                  className={`badge badge-sm ${isOnline ? "badge-success" : "badge-ghost"}`}
+                  className={`badge badge-sm ${isOnline ? "badge-success" : "badge-error"}`}
                 >
                   {isOnline ? "Online" : "Offline"}
                 </span>
@@ -99,7 +99,12 @@ export function InterfaceList({
               <button
                 className="btn btn-sm btn-ghost"
                 onClick={() =>
-                  addInterfaceModal?.open(deviceId, iface, deviceType, isController)
+                  addInterfaceModal?.open(
+                    deviceId,
+                    iface,
+                    deviceType,
+                    isController,
+                  )
                 }
               >
                 <VscEdit /> Editar
@@ -107,7 +112,7 @@ export function InterfaceList({
             </div>
           )}
           {isController && (
-            <p className="text-xs text-base-content/50 mt-4">
+            <p className="mt-4 text-xs text-base-content/50">
               Interface do controlador não pode ser editada.
             </p>
           )}
@@ -122,7 +127,14 @@ export function InterfaceList({
         <h3 className="font-bold text-base">Interfaces</h3>
         <button
           className="btn btn-sm btn-ghost"
-          onClick={() => addInterfaceModal?.open(deviceId, undefined, deviceType, isController)}
+          onClick={() =>
+            addInterfaceModal?.open(
+              deviceId,
+              undefined,
+              deviceType,
+              isController,
+            )
+          }
         >
           <VscAddCompact />
         </button>
@@ -162,14 +174,16 @@ export function InterfaceList({
                     </td>
                     <td>
                       <span
-                        className={`badge badge-sm ${isOnline ? "badge-success" : "badge-ghost"}`}
+                        className={`badge badge-sm ${isOnline ? "badge-success" : "badge-error"}`}
                       >
                         {isOnline ? "Online" : "Offline"}
                       </span>
                     </td>
                     <td>
                       {iface.reservedIp ? (
-                        <span className="badge badge-sm badge-success">Sim</span>
+                        <span className="badge badge-sm badge-success">
+                          Sim
+                        </span>
                       ) : (
                         <span className="text-xs text-base-content/50">
                           Não

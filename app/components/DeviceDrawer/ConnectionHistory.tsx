@@ -26,7 +26,7 @@ export function ConnectionHistory({ deviceId }: Props) {
     return (
       <div className="mt-4">
         <h3 className="mb-2 font-bold text-base">Histórico de Conexão</h3>
-        <div className="flex items-center justify-center py-8">
+        <div className="flex justify-center items-center py-8">
           <span className="loading loading-spinner loading-sm"></span>
         </div>
       </div>
@@ -48,7 +48,7 @@ export function ConnectionHistory({ deviceId }: Props) {
     return (
       <div className="mt-4">
         <h3 className="mb-2 font-bold text-base">Histórico de Conexão</h3>
-        <p className="text-sm text-gray-500">
+        <p className="text-gray-500 text-sm">
           Nenhum registro nas últimas 24 horas
         </p>
       </div>
@@ -57,24 +57,27 @@ export function ConnectionHistory({ deviceId }: Props) {
 
   const onlineChecks = data.filter((c) => c.online).length;
   const totalChecks = data.length;
-  const uptime = totalChecks > 0 ? Math.round((onlineChecks / totalChecks) * 100) : 0;
+  const uptime =
+    totalChecks > 0 ? Math.round((onlineChecks / totalChecks) * 100) : 0;
 
   return (
     <div className="mt-4">
       <h3 className="mb-2 font-bold text-base">Histórico de Conexão</h3>
 
-      <div className="mb-4 grid grid-cols-3 gap-2 text-center">
-        <div className="rounded bg-base-100 border border-base-300 p-2">
-          <div className="text-lg font-bold">{uptime}%</div>
+      <div className="gap-2 grid grid-cols-3 mb-4 text-center">
+        <div className="bg-base-100 p-2 border border-base-300 rounded">
+          <div className="font-bold text-lg">{uptime}%</div>
           <div className="text-xs text-base-content/60">Uptime</div>
         </div>
-        <div className="rounded bg-success/10 border border-success/30 p-2">
-          <div className="text-lg font-bold text-success">{onlineChecks}</div>
-          <div className="text-xs text-success/80">Online</div>
+        <div className="bg-success/10 p-2 border border-success/30 rounded">
+          <div className="font-bold text-success text-lg">{onlineChecks}</div>
+          <div className="text-success/80 text-xs">Online</div>
         </div>
-        <div className="rounded bg-error/10 border border-error/30 p-2">
-          <div className="text-lg font-bold text-error">{totalChecks - onlineChecks}</div>
-          <div className="text-xs text-error/80">Offline</div>
+        <div className="bg-error/10 p-2 border border-error/30 rounded">
+          <div className="font-bold text-error text-lg">
+            {totalChecks - onlineChecks}
+          </div>
+          <div className="text-error/80 text-xs">Offline</div>
         </div>
       </div>
 
@@ -112,7 +115,7 @@ export function ConnectionHistory({ deviceId }: Props) {
                         <span key={iface.mac} className="text-sm">
                           {iface.name}
                           {iface.routerInterface ? (
-                            <span className="text-xs text-base-content/50 ml-1">
+                            <span className="ml-1 text-xs text-base-content/50">
                               ({iface.routerInterface})
                             </span>
                           ) : null}
