@@ -42,16 +42,14 @@ export function InterfaceList({
           <p className="text-base-content/60">
             Nenhuma interface configurada.
           </p>
-          {!isController && (
-            <button
-              className="btn btn-sm btn-primary mt-2"
-              onClick={() =>
-                addInterfaceModal?.open(deviceId, undefined, deviceType, isController)
-              }
-            >
-              Adicionar Interface
-            </button>
-          )}
+          <button
+            className="btn btn-sm btn-primary mt-2"
+            onClick={() =>
+              addInterfaceModal?.open(deviceId, undefined, deviceType, isController)
+            }
+          >
+            Adicionar Interface
+          </button>
         </div>
       );
     }

@@ -96,8 +96,7 @@ export function AddInterfaceModal() {
           name: editingInterface.name,
           mac: editingInterface.mac,
           ip: data.get("Endereço IP")?.toString() ?? editingInterface.ip,
-          reservedIp:
-            data.get("IP Reservado") === "on" || editingInterface.reservedIp,
+          reservedIp: data.get("IP Reservado") === "on",
           allowList: false,
         };
       } else {

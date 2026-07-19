@@ -59,7 +59,12 @@ export class Router {
       `$("#pc-login-password").is(":visible")`,
     );
     if (!isLoggedOut) return;
-    await evaluate(page, `$("#pc-login-password").val("${password}")`);
+    await page.evaluate((pwd) => {
+      const input = document.querySelector(
+        "#pc-login-password",
+      ) as HTMLInputElement | null;
+      if (input) input.value = pwd;
+    }, password);
     await wait(100);
     await evaluate(page, `$("#pc-login-btn").click()`);
 

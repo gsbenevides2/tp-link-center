@@ -22,24 +22,26 @@ export abstract class Device {
   static async create(
     params: DeviceModel["createBody"],
   ): Promise<DeviceModel["createReponse"]> {
-    if (params.type === "router" && params.isController) {
-      await db
-        .update(devices)
-        .set({ isController: false })
-        .where(eq(devices.isController, true));
-    }
+    const createdDevice = await db.transaction(async (tx) => {
+      if (params.type === "router" && params.isController) {
+        await tx
+          .update(devices)
+          .set({ isController: false })
+          .where(eq(devices.isController, true));
+      }
 
-    const encryptedPassword = params.routerPassword
-      ? encryptPassword(params.routerPassword)
-      : null;
+      const encryptedPassword = params.routerPassword
+        ? encryptPassword(params.routerPassword)
+        : null;
 
-    const createdDevice = await db
-      .insert(devices)
-      .values({
-        ...params,
-        routerPassword: encryptedPassword,
-      })
-      .returning();
+      return tx
+        .insert(devices)
+        .values({
+          ...params,
+          routerPassword: encryptedPassword,
+        })
+        .returning();
+    });
     const id = createdDevice.at(0)?.id;
     if (!id) throw Error("Id not generated");
     return {
@@ -54,25 +56,27 @@ export abstract class Device {
     params: DeviceModel["updateParams"],
     body: DeviceModel["updateBody"],
   ) {
-    if (body.type === "router" && body.isController) {
-      await db
-        .update(devices)
-        .set({ isController: false })
-        .where(eq(devices.isController, true));
-    }
+    await db.transaction(async (tx) => {
+      if (body.type === "router" && body.isController) {
+        await tx
+          .update(devices)
+          .set({ isController: false })
+          .where(eq(devices.isController, true));
+      }
 
-    const encryptedPassword = body.routerPassword
-      ? encryptPassword(body.routerPassword)
-      : body.routerPassword === null
-        ? null
-        : undefined;
+      const encryptedPassword = body.routerPassword
+        ? encryptPassword(body.routerPassword)
+        : body.routerPassword === null
+          ? null
+          : undefined;
 
-    const updateData: Record<string, unknown> = { ...body };
-    if (encryptedPassword !== undefined) {
-      updateData.routerPassword = encryptedPassword;
-    }
+      const updateData: Record<string, unknown> = { ...body };
+      if (encryptedPassword !== undefined) {
+        updateData.routerPassword = encryptedPassword;
+      }
 
-    await db.update(devices).set(updateData).where(eq(devices.id, params.id));
+      await tx.update(devices).set(updateData).where(eq(devices.id, params.id));
+    });
   }
   static async createInterface(
     deviceId: string,
