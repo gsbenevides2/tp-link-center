@@ -129,16 +129,18 @@ export class Router {
       }
     }
     return await Promise.all(
-      DEV2_WIFI_APDEV.filter((item) => item.X_TP_Active === "1").map(async (item) => ({
-        ip: item.X_TP_IPAddress,
-        mac: item.MACAddress,
-        name:
-          (await Device.getDeviceNameOfMac(item.MACAddress)) ||
-          item.X_TP_HostName ||
-          "Unknown",
-        routerInterface: processBackLinkType(item.backhaulLinkType),
-        vendor: this.getVendorCached(item.MACAddress),
-      })),
+      DEV2_WIFI_APDEV.filter((item) => item.X_TP_Active === "1").map(
+        async (item) => ({
+          ip: item.X_TP_IPAddress,
+          mac: item.MACAddress,
+          name:
+            (await Device.getDeviceNameOfMac(item.MACAddress)) ||
+            item.X_TP_HostName ||
+            "Unknown",
+          routerInterface: processBackLinkType(item.backhaulLinkType),
+          vendor: this.getVendorCached(item.MACAddress),
+        }),
+      ),
     );
   }
 
@@ -196,16 +198,18 @@ export class Router {
     }
 
     return await Promise.all(
-      DEV2_WIFI_APDEV_ASSOCDEV.filter((item) => item.active === "1").map(async (item) => ({
-        ip: item.X_TP_IPAddress,
-        mac: item.MACAddress,
-        name:
-          (await Device.getDeviceNameOfMac(item.MACAddress)) ||
-          item.X_TP_HostName ||
-          "Unknown",
-        vendor: this.getVendorCached(item.MACAddress),
-        routerInterface: getRouterInterface(item.X_TP_RadioMac),
-      })),
+      DEV2_WIFI_APDEV_ASSOCDEV.filter((item) => item.active === "1").map(
+        async (item) => ({
+          ip: item.X_TP_IPAddress,
+          mac: item.MACAddress,
+          name:
+            (await Device.getDeviceNameOfMac(item.MACAddress)) ||
+            item.X_TP_HostName ||
+            "Unknown",
+          vendor: this.getVendorCached(item.MACAddress),
+          routerInterface: getRouterInterface(item.X_TP_RadioMac),
+        }),
+      ),
     );
   }
 
@@ -235,16 +239,18 @@ export class Router {
     );
 
     return await Promise.all(
-      DEV2_WIFI_APDEV_ETHASSOCDEV.filter((i) => i.active === "1").map(async (i) => ({
-        ip: i.IPAddress,
-        mac: i.MACAddress,
-        name:
-          (await Device.getDeviceNameOfMac(i.MACAddress)) ||
-          i.X_TP_HostName ||
-          "Unknown",
-        routerInterface: "Cabeada",
-        vendor: this.getVendorCached(i.MACAddress),
-      })),
+      DEV2_WIFI_APDEV_ETHASSOCDEV.filter((i) => i.active === "1").map(
+        async (i) => ({
+          ip: i.IPAddress,
+          mac: i.MACAddress,
+          name:
+            (await Device.getDeviceNameOfMac(i.MACAddress)) ||
+            i.X_TP_HostName ||
+            "Unknown",
+          routerInterface: "Cabeada",
+          vendor: this.getVendorCached(i.MACAddress),
+        }),
+      ),
     );
   }
 
@@ -257,9 +263,7 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(
-      `http://${controller.ip}`,
-    );
+    const { page } = await createPage(`http://${controller.ip}`);
     try {
       await this.login(page, controller.ip, controller.password);
 
@@ -282,9 +286,7 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(
-      `http://${controller.ip}`,
-    );
+    const { page } = await createPage(`http://${controller.ip}`);
     try {
       await this.login(page, controller.ip, controller.password);
 
@@ -329,9 +331,7 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(
-      `http://${controller.ip}`,
-    );
+    const { page } = await createPage(`http://${controller.ip}`);
     try {
       await this.login(page, controller.ip, controller.password);
 
@@ -374,9 +374,7 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(
-      `http://${controller.ip}`,
-    );
+    const { page } = await createPage(`http://${controller.ip}`);
     try {
       await this.login(page, controller.ip, controller.password);
       await evaluate<void>(
@@ -411,9 +409,7 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(
-      `http://${controller.ip}`,
-    );
+    const { page } = await createPage(`http://${controller.ip}`);
     try {
       await this.login(page, controller.ip, controller.password);
 
@@ -463,9 +459,7 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(
-      `http://${controller.ip}`,
-    );
+    const { page } = await createPage(`http://${controller.ip}`);
     try {
       await this.login(page, controller.ip, controller.password);
 
@@ -529,9 +523,7 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(
-      `http://${controller.ip}`,
-    );
+    const { page } = await createPage(`http://${controller.ip}`);
     try {
       await this.login(page, controller.ip, controller.password);
 
@@ -580,9 +572,7 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(
-      `http://${controller.ip}`,
-    );
+    const { page } = await createPage(`http://${controller.ip}`);
     try {
       await this.login(page, controller.ip, controller.password);
       await evaluate<void>(
@@ -606,6 +596,43 @@ export class Router {
     } finally {
       await page.close();
 
+      await this.release();
+    }
+  }
+
+  static async restartNetwork() {
+    await this.waitRelease();
+    try {
+      const allRouters = await Device.getAllRouters();
+      const controller = allRouters.find((r) => r.isController);
+      const agents = allRouters.filter((r) => !r.isController);
+      for (const agent of agents) {
+        const { page } = await createPage(`http://${agent.ip}`);
+        await this.login(page, agent.ip, agent.password);
+        await evaluate<void>(
+          page,
+          `(function routers(){
+            $.dm.op({
+                oid: "ACT_REBOOT"
+            })
+        })()`,
+        );
+        await page.close();
+      }
+      if (controller) {
+        const { page } = await createPage(`http://${controller.ip}`);
+        await this.login(page, controller.ip, controller.password);
+        await evaluate<void>(
+          page,
+          `(function routers(){
+            $.dm.op({
+                oid: "ACT_REBOOT"
+            })
+        })()`,
+        );
+        await page.close();
+      }
+    } finally {
       await this.release();
     }
   }

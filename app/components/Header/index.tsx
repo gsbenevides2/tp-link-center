@@ -1,13 +1,14 @@
 "use client";
 
 import { Logo } from "@/app/icons/logo";
-import { useSyncRouter, useTriggerOnlineCheck } from "../RegisteredDevicesSection/useDevices";
+import { useSyncRouter, useTriggerOnlineCheck, useRestartNetwork } from "../RegisteredDevicesSection/useDevices";
 import { useSettingsQuery, useUpdateSetting } from "@/app/hooks/useSettings";
-import { VscSync, VscCheck } from "react-icons/vsc";
+import { VscSync, VscCheck, VscDebugRestart } from "react-icons/vsc";
 
 export function Header() {
   const { mutate: syncRouter, isPending } = useSyncRouter();
   const { mutate: triggerCheck, isPending: isTriggering } = useTriggerOnlineCheck();
+  const { mutate: restartNetwork, isPending: isRestarting } = useRestartNetwork();
   const { data: settings } = useSettingsQuery();
   const { mutate: updateSetting, isPending: isUpdatingSetting } = useUpdateSetting();
 
@@ -62,6 +63,18 @@ export function Header() {
             <VscSync />
           )}
           Sincronizar
+        </button>
+        <button
+          className="btn btn-sm btn-ghost text-white"
+          onClick={() => restartNetwork()}
+          disabled={isRestarting}
+        >
+          {isRestarting ? (
+            <span className="loading loading-spinner loading-sm"></span>
+          ) : (
+            <VscDebugRestart />
+          )}
+          Reiniciar Rede
         </button>
       </div>
     </header>

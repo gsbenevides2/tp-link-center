@@ -2,10 +2,7 @@ import type { DeviceModel } from "@/server/modules/devices/model";
 import { db } from "@/server/db";
 import { devices, interfaces } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
-import {
-  encryptPassword,
-  decryptPassword,
-} from "@/server/utils/crypto";
+import { encryptPassword, decryptPassword } from "@/server/utils/crypto";
 
 export abstract class Device {
   static async get(): Promise<DeviceModel["getResponse"]> {
@@ -133,9 +130,7 @@ export abstract class Device {
         .where(eq(interfaces.id, params.interfaceId));
     }
   }
-  static async deleteInterface(
-    params: DeviceModel["deleteInterfaceParams"],
-  ) {
+  static async deleteInterface(params: DeviceModel["deleteInterfaceParams"]) {
     await db.delete(interfaces).where(eq(interfaces.id, params.interfaceId));
   }
   static async getDeviceNameOfMac(mac: string): Promise<string | undefined> {
@@ -177,5 +172,38 @@ export abstract class Device {
       ip: controller.interfaces[0].ip,
       password: decryptPassword(controller.routerPassword),
     };
+  }
+
+  static async getAllRouters() {
+    const devices = await db.query.devices.findMany({
+      columns: {
+        isController: true,
+        routerPassword: true,
+      },
+      where: {
+        type: "router",
+      },
+      with: {
+        interfaces: {
+          columns: {
+            ip: true,
+          },
+        },
+      },
+    });
+
+    const routers = devices
+      .map((d) => ({
+        ip: d.interfaces.at(0)?.ip,
+        password: d.routerPassword,
+        isController: d.isController,
+      }))
+      .filter((d) => d.ip && d.password) as {
+      ip: string;
+      password: string;
+      isController: boolean;
+    }[];
+
+    return routers;
   }
 }
