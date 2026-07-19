@@ -58,7 +58,6 @@ export class Router {
       `$("#pc-login-password").is(":visible")`,
     );
     if (!isLoggedOut) return;
-    console.log({ password });
     await page.evaluate((pwd) => {
       const input = document.querySelector(
         "#pc-login-password",
@@ -608,29 +607,35 @@ export class Router {
       const agents = allRouters.filter((r) => !r.isController);
       for (const agent of agents) {
         const { page } = await createPage(`http://${agent.ip}`);
-        await this.login(page, agent.password);
-        await evaluate<void>(
-          page,
-          `(function routers(){
+        try {
+          await this.login(page, agent.password);
+          await evaluate<void>(
+            page,
+            `(function routers(){
             $.dm.op({
                 oid: "ACT_REBOOT"
             })
         })()`,
-        );
-        await page.close();
+          );
+        } finally {
+          await page.close();
+        }
       }
       if (controller) {
         const { page } = await createPage(`http://${controller.ip}`);
-        await this.login(page, controller.password);
-        await evaluate<void>(
-          page,
-          `(function routers(){
+        try {
+          await this.login(page, controller.password);
+          await evaluate<void>(
+            page,
+            `(function routers(){
             $.dm.op({
                 oid: "ACT_REBOOT"
             })
         })()`,
-        );
-        await page.close();
+          );
+        } finally {
+          await page.close();
+        }
       }
     } finally {
       await this.release();
