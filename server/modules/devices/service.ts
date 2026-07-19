@@ -28,7 +28,7 @@ export abstract class Device {
       }
 
       const encryptedPassword = params.routerPassword
-        ? encryptPassword(params.routerPassword)
+        ? await encryptPassword(params.routerPassword)
         : null;
 
       return tx
@@ -170,7 +170,7 @@ export abstract class Device {
       id: controller.id,
       name: controller.name,
       ip: controller.interfaces[0].ip,
-      password: decryptPassword(controller.routerPassword),
+      password: await decryptPassword(controller.routerPassword),
     };
   }
 
@@ -192,15 +192,16 @@ export abstract class Device {
       },
     });
 
-    const routers = devices
-      .map((d) => ({
-        ip: d.interfaces.at(0)?.ip,
-        password: d.routerPassword
-          ? decryptPassword(d.routerPassword)
-          : undefined,
-        isController: d.isController,
-      }))
-      .filter((d) => d.ip && d.password) as {
+    const routersPromise = devices.map(async (d) => ({
+      ip: d.interfaces.at(0)?.ip,
+      password: d.routerPassword
+        ? await decryptPassword(d.routerPassword)
+        : undefined,
+      isController: d.isController,
+    }));
+
+    const routerInitialList = await Promise.all(routersPromise);
+    const routers = routerInitialList.filter((d) => d.ip && d.password) as {
       ip: string;
       password: string;
       isController: boolean;

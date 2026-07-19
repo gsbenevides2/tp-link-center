@@ -69,6 +69,11 @@ export class Router {
 
     while (true) {
       await wait(100);
+      const isInvalid = await evaluate<boolean>(
+        page,
+        `$(".content.error-tips-content").is(":visible")`,
+      ).catch(() => false);
+      if (isInvalid) throw new Error("Password is Invalid for: " + page.url());
       const isForcing = await evaluate<boolean>(
         page,
         `$("#confirm-yes").is(":visible")`,
