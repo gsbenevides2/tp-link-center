@@ -153,4 +153,26 @@ export const router = new Elysia({
         [StatusMap["No Content"]]: z.void(),
       },
     },
+  )
+  .post(
+    "/restart-network",
+    async () => {
+      await Router.restartNetwork();
+      return status(StatusMap.OK, { success: true });
+    },
+    {
+      detail: {
+        summary: "Restart Network",
+        description:
+          "Restart all routers in the network. Agents are restarted first, then the controller.",
+      },
+      response: {
+        [StatusMap.OK]: z.object({
+          success: z.boolean().meta({
+            title: "Success",
+            description: "Whether the restart was successful.",
+          }),
+        }),
+      },
+    },
   );

@@ -195,3 +195,18 @@ export function useTriggerOnlineCheck() {
     },
   });
 }
+
+export function useRestartNetwork() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const response = await clientSideApi.router["restart-network"].post();
+      if (response.error) throw response.error;
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [DEVICES_KEY] });
+    },
+  });
+}

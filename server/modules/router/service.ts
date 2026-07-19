@@ -50,7 +50,6 @@ export class Router {
 
   private static async login(
     page: import("puppeteer-core").Page,
-    endpoint: string,
     password: string,
   ) {
     await wait(200);
@@ -70,6 +69,11 @@ export class Router {
 
     while (true) {
       await wait(100);
+      const isInvalid = await evaluate<boolean>(
+        page,
+        `$(".content.error-tips-content").is(":visible")`,
+      ).catch(() => false);
+      if (isInvalid) throw new Error("Password is Invalid for: " + page.url());
       const isForcing = await evaluate<boolean>(
         page,
         `$("#confirm-yes").is(":visible")`,
@@ -129,16 +133,18 @@ export class Router {
       }
     }
     return await Promise.all(
-      DEV2_WIFI_APDEV.filter((item) => item.X_TP_Active === "1").map(async (item) => ({
-        ip: item.X_TP_IPAddress,
-        mac: item.MACAddress,
-        name:
-          (await Device.getDeviceNameOfMac(item.MACAddress)) ||
-          item.X_TP_HostName ||
-          "Unknown",
-        routerInterface: processBackLinkType(item.backhaulLinkType),
-        vendor: this.getVendorCached(item.MACAddress),
-      })),
+      DEV2_WIFI_APDEV.filter((item) => item.X_TP_Active === "1").map(
+        async (item) => ({
+          ip: item.X_TP_IPAddress,
+          mac: item.MACAddress,
+          name:
+            (await Device.getDeviceNameOfMac(item.MACAddress)) ||
+            item.X_TP_HostName ||
+            "Unknown",
+          routerInterface: processBackLinkType(item.backhaulLinkType),
+          vendor: this.getVendorCached(item.MACAddress),
+        }),
+      ),
     );
   }
 
@@ -196,16 +202,18 @@ export class Router {
     }
 
     return await Promise.all(
-      DEV2_WIFI_APDEV_ASSOCDEV.filter((item) => item.active === "1").map(async (item) => ({
-        ip: item.X_TP_IPAddress,
-        mac: item.MACAddress,
-        name:
-          (await Device.getDeviceNameOfMac(item.MACAddress)) ||
-          item.X_TP_HostName ||
-          "Unknown",
-        vendor: this.getVendorCached(item.MACAddress),
-        routerInterface: getRouterInterface(item.X_TP_RadioMac),
-      })),
+      DEV2_WIFI_APDEV_ASSOCDEV.filter((item) => item.active === "1").map(
+        async (item) => ({
+          ip: item.X_TP_IPAddress,
+          mac: item.MACAddress,
+          name:
+            (await Device.getDeviceNameOfMac(item.MACAddress)) ||
+            item.X_TP_HostName ||
+            "Unknown",
+          vendor: this.getVendorCached(item.MACAddress),
+          routerInterface: getRouterInterface(item.X_TP_RadioMac),
+        }),
+      ),
     );
   }
 
@@ -235,16 +243,18 @@ export class Router {
     );
 
     return await Promise.all(
-      DEV2_WIFI_APDEV_ETHASSOCDEV.filter((i) => i.active === "1").map(async (i) => ({
-        ip: i.IPAddress,
-        mac: i.MACAddress,
-        name:
-          (await Device.getDeviceNameOfMac(i.MACAddress)) ||
-          i.X_TP_HostName ||
-          "Unknown",
-        routerInterface: "Cabeada",
-        vendor: this.getVendorCached(i.MACAddress),
-      })),
+      DEV2_WIFI_APDEV_ETHASSOCDEV.filter((i) => i.active === "1").map(
+        async (i) => ({
+          ip: i.IPAddress,
+          mac: i.MACAddress,
+          name:
+            (await Device.getDeviceNameOfMac(i.MACAddress)) ||
+            i.X_TP_HostName ||
+            "Unknown",
+          routerInterface: "Cabeada",
+          vendor: this.getVendorCached(i.MACAddress),
+        }),
+      ),
     );
   }
 
@@ -257,11 +267,9 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(
-      `http://${controller.ip}`,
-    );
+    const { page } = await createPage(`http://${controller.ip}`);
     try {
-      await this.login(page, controller.ip, controller.password);
+      await this.login(page, controller.password);
 
       const results = await this.getConnectedEasyMeshDevices(page);
       results.push(...(await this.getConnectedWifiDevices(page)));
@@ -282,11 +290,9 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(
-      `http://${controller.ip}`,
-    );
+    const { page } = await createPage(`http://${controller.ip}`);
     try {
-      await this.login(page, controller.ip, controller.password);
+      await this.login(page, controller.password);
 
       const DEV2_DHCPV4_POOL_STATICADDR = await evaluate<
         Array<{
@@ -329,11 +335,9 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(
-      `http://${controller.ip}`,
-    );
+    const { page } = await createPage(`http://${controller.ip}`);
     try {
-      await this.login(page, controller.ip, controller.password);
+      await this.login(page, controller.password);
 
       const DEV2_DHCPV4_POOL_STATICADDR = await evaluate<{
         stack: string;
@@ -374,11 +378,9 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(
-      `http://${controller.ip}`,
-    );
+    const { page } = await createPage(`http://${controller.ip}`);
     try {
-      await this.login(page, controller.ip, controller.password);
+      await this.login(page, controller.password);
       await evaluate<void>(
         page,
         `(function routers(){
@@ -411,11 +413,9 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(
-      `http://${controller.ip}`,
-    );
+    const { page } = await createPage(`http://${controller.ip}`);
     try {
-      await this.login(page, controller.ip, controller.password);
+      await this.login(page, controller.password);
 
       const chains = await evaluate<
         Array<{
@@ -463,11 +463,9 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(
-      `http://${controller.ip}`,
-    );
+    const { page } = await createPage(`http://${controller.ip}`);
     try {
-      await this.login(page, controller.ip, controller.password);
+      await this.login(page, controller.password);
 
       const rules = await evaluate<
         Array<{
@@ -529,11 +527,9 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(
-      `http://${controller.ip}`,
-    );
+    const { page } = await createPage(`http://${controller.ip}`);
     try {
-      await this.login(page, controller.ip, controller.password);
+      await this.login(page, controller.password);
 
       const result = await evaluate<{
         stack: string;
@@ -580,11 +576,9 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(
-      `http://${controller.ip}`,
-    );
+    const { page } = await createPage(`http://${controller.ip}`);
     try {
-      await this.login(page, controller.ip, controller.password);
+      await this.login(page, controller.password);
       await evaluate<void>(
         page,
         `(function routers(){
@@ -606,6 +600,49 @@ export class Router {
     } finally {
       await page.close();
 
+      await this.release();
+    }
+  }
+
+  static async restartNetwork() {
+    await this.waitRelease();
+    try {
+      const allRouters = await Device.getAllRouters();
+      const controller = allRouters.find((r) => r.isController);
+      const agents = allRouters.filter((r) => !r.isController);
+      for (const agent of agents) {
+        const { page } = await createPage(`http://${agent.ip}`);
+        try {
+          await this.login(page, agent.password);
+          await evaluate<void>(
+            page,
+            `(function routers(){
+            $.dm.op({
+                oid: "ACT_REBOOT"
+            })
+        })()`,
+          );
+        } finally {
+          await page.close();
+        }
+      }
+      if (controller) {
+        const { page } = await createPage(`http://${controller.ip}`);
+        try {
+          await this.login(page, controller.password);
+          await evaluate<void>(
+            page,
+            `(function routers(){
+            $.dm.op({
+                oid: "ACT_REBOOT"
+            })
+        })()`,
+          );
+        } finally {
+          await page.close();
+        }
+      }
+    } finally {
       await this.release();
     }
   }

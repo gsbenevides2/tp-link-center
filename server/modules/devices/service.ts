@@ -2,10 +2,7 @@ import type { DeviceModel } from "@/server/modules/devices/model";
 import { db } from "@/server/db";
 import { devices, interfaces } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
-import {
-  encryptPassword,
-  decryptPassword,
-} from "@/server/utils/crypto";
+import { encryptPassword, decryptPassword } from "@/server/utils/crypto";
 
 export abstract class Device {
   static async get(): Promise<DeviceModel["getResponse"]> {
@@ -31,7 +28,7 @@ export abstract class Device {
       }
 
       const encryptedPassword = params.routerPassword
-        ? encryptPassword(params.routerPassword)
+        ? await encryptPassword(params.routerPassword)
         : null;
 
       return tx
@@ -133,9 +130,7 @@ export abstract class Device {
         .where(eq(interfaces.id, params.interfaceId));
     }
   }
-  static async deleteInterface(
-    params: DeviceModel["deleteInterfaceParams"],
-  ) {
+  static async deleteInterface(params: DeviceModel["deleteInterfaceParams"]) {
     await db.delete(interfaces).where(eq(interfaces.id, params.interfaceId));
   }
   static async getDeviceNameOfMac(mac: string): Promise<string | undefined> {
@@ -175,7 +170,43 @@ export abstract class Device {
       id: controller.id,
       name: controller.name,
       ip: controller.interfaces[0].ip,
-      password: decryptPassword(controller.routerPassword),
+      password: await decryptPassword(controller.routerPassword),
     };
+  }
+
+  static async getAllRouters() {
+    const devices = await db.query.devices.findMany({
+      columns: {
+        isController: true,
+        routerPassword: true,
+      },
+      where: {
+        type: "router",
+      },
+      with: {
+        interfaces: {
+          columns: {
+            ip: true,
+          },
+        },
+      },
+    });
+
+    const routersPromise = devices.map(async (d) => ({
+      ip: d.interfaces.at(0)?.ip,
+      password: d.routerPassword
+        ? await decryptPassword(d.routerPassword)
+        : undefined,
+      isController: d.isController,
+    }));
+
+    const routerInitialList = await Promise.all(routersPromise);
+    const routers = routerInitialList.filter((d) => d.ip && d.password) as {
+      ip: string;
+      password: string;
+      isController: boolean;
+    }[];
+
+    return routers;
   }
 }

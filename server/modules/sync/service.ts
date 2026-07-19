@@ -40,7 +40,7 @@ export class Sync {
     const interfacesToSync = dbInterfaces.filter(
       (i) =>
         i.device?.type === "client" ||
-        (i.device?.type === "router" && i.device.isController),
+        (i.device?.type === "router" && !i.device.isController),
     );
 
     const routerEntries = await Router.listDHCPEntry();
