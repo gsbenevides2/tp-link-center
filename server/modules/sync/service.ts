@@ -43,8 +43,6 @@ export class Sync {
         (i.device?.type === "router" && !i.device.isController),
     );
 
-    console.log({ interfacesToSync });
-
     const routerEntries = await Router.listDHCPEntry();
 
     const dbMacs = new Set(interfacesToSync.map((i) => normalizeMac(i.mac)));
