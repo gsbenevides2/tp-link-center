@@ -195,7 +195,9 @@ export abstract class Device {
     const routers = devices
       .map((d) => ({
         ip: d.interfaces.at(0)?.ip,
-        password: d.routerPassword,
+        password: d.routerPassword
+          ? decryptPassword(d.routerPassword)
+          : undefined,
         isController: d.isController,
       }))
       .filter((d) => d.ip && d.password) as {

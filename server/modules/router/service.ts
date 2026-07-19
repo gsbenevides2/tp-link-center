@@ -50,7 +50,6 @@ export class Router {
 
   private static async login(
     page: import("puppeteer-core").Page,
-    endpoint: string,
     password: string,
   ) {
     await wait(200);
@@ -59,6 +58,7 @@ export class Router {
       `$("#pc-login-password").is(":visible")`,
     );
     if (!isLoggedOut) return;
+    console.log({ password });
     await page.evaluate((pwd) => {
       const input = document.querySelector(
         "#pc-login-password",
@@ -265,7 +265,7 @@ export class Router {
     await this.waitRelease();
     const { page } = await createPage(`http://${controller.ip}`);
     try {
-      await this.login(page, controller.ip, controller.password);
+      await this.login(page, controller.password);
 
       const results = await this.getConnectedEasyMeshDevices(page);
       results.push(...(await this.getConnectedWifiDevices(page)));
@@ -288,7 +288,7 @@ export class Router {
     await this.waitRelease();
     const { page } = await createPage(`http://${controller.ip}`);
     try {
-      await this.login(page, controller.ip, controller.password);
+      await this.login(page, controller.password);
 
       const DEV2_DHCPV4_POOL_STATICADDR = await evaluate<
         Array<{
@@ -333,7 +333,7 @@ export class Router {
     await this.waitRelease();
     const { page } = await createPage(`http://${controller.ip}`);
     try {
-      await this.login(page, controller.ip, controller.password);
+      await this.login(page, controller.password);
 
       const DEV2_DHCPV4_POOL_STATICADDR = await evaluate<{
         stack: string;
@@ -376,7 +376,7 @@ export class Router {
     await this.waitRelease();
     const { page } = await createPage(`http://${controller.ip}`);
     try {
-      await this.login(page, controller.ip, controller.password);
+      await this.login(page, controller.password);
       await evaluate<void>(
         page,
         `(function routers(){
@@ -411,7 +411,7 @@ export class Router {
     await this.waitRelease();
     const { page } = await createPage(`http://${controller.ip}`);
     try {
-      await this.login(page, controller.ip, controller.password);
+      await this.login(page, controller.password);
 
       const chains = await evaluate<
         Array<{
@@ -461,7 +461,7 @@ export class Router {
     await this.waitRelease();
     const { page } = await createPage(`http://${controller.ip}`);
     try {
-      await this.login(page, controller.ip, controller.password);
+      await this.login(page, controller.password);
 
       const rules = await evaluate<
         Array<{
@@ -525,7 +525,7 @@ export class Router {
     await this.waitRelease();
     const { page } = await createPage(`http://${controller.ip}`);
     try {
-      await this.login(page, controller.ip, controller.password);
+      await this.login(page, controller.password);
 
       const result = await evaluate<{
         stack: string;
@@ -574,7 +574,7 @@ export class Router {
     await this.waitRelease();
     const { page } = await createPage(`http://${controller.ip}`);
     try {
-      await this.login(page, controller.ip, controller.password);
+      await this.login(page, controller.password);
       await evaluate<void>(
         page,
         `(function routers(){
@@ -608,7 +608,7 @@ export class Router {
       const agents = allRouters.filter((r) => !r.isController);
       for (const agent of agents) {
         const { page } = await createPage(`http://${agent.ip}`);
-        await this.login(page, agent.ip, agent.password);
+        await this.login(page, agent.password);
         await evaluate<void>(
           page,
           `(function routers(){
@@ -621,7 +621,7 @@ export class Router {
       }
       if (controller) {
         const { page } = await createPage(`http://${controller.ip}`);
-        await this.login(page, controller.ip, controller.password);
+        await this.login(page, controller.password);
         await evaluate<void>(
           page,
           `(function routers(){
