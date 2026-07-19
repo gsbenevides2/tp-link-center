@@ -23,10 +23,11 @@ echo "Montando contexto para geração de release notes..."
     echo "=== DIFF (sem arquivos de lock e node_modules) ==="
 
     if [ -z "$PREV_TAG" ]; then
-        git diff HEAD~5..HEAD -- . ':!bun.lock' ':!node_modules' 2>/dev/null | head -c 40000
+        git diff HEAD~5..HEAD -- . ':!bun.lock' ':!node_modules' 2>/dev/null > /tmp/full_diff.txt || true
     else
-        git diff "${PREV_TAG}..HEAD" -- . ':!bun.lock' ':!node_modules' 2>/dev/null | head -c 40000
+        git diff "${PREV_TAG}..HEAD" -- . ':!bun.lock' ':!node_modules' 2>/dev/null > /tmp/full_diff.txt || true
     fi
+    head -c 40000 /tmp/full_diff.txt || true
 } > /tmp/changes.txt
 echo "Contexto montado em /tmp/changes.txt"
 
