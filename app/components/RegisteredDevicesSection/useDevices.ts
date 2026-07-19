@@ -69,6 +69,10 @@ export function useAddDevice() {
   });
 }
 
+type UpdateDeviceBody = Parameters<
+  ReturnType<typeof clientSideApi.devices>["put"]
+>[0];
+
 export function useUpdateDevice() {
   const queryClient = useQueryClient();
 
@@ -78,13 +82,7 @@ export function useUpdateDevice() {
       body,
     }: {
       deviceId: string;
-      body: {
-        name: string;
-        brand: string;
-        type: DeviceType;
-        isController: boolean;
-        routerPassword: string | null;
-      };
+      body: UpdateDeviceBody;
     }) => {
       await clientSideApi.devices({ id: deviceId }).put(body);
     },

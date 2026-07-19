@@ -171,7 +171,7 @@ export function InterfaceList({
                     </td>
                     <td>
                       {iface.reservedIp ? (
-                        <span className="badge badge-sm badge-info">Sim</span>
+                        <span className="badge badge-sm badge-success">Sim</span>
                       ) : (
                         <span className="text-xs text-base-content/50">
                           Não
