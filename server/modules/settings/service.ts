@@ -18,18 +18,10 @@ export abstract class Settings {
     key: string,
     value: string,
   ): Promise<SettingsModel["getResponse"]> {
-    await db
-      .insert(settings)
-      .values({ key, value })
-      .onConflictDoUpdate({
-        target: settings.key,
-        set: { value },
-      });
+    await db.insert(settings).values({ key, value }).onConflictDoUpdate({
+      target: settings.key,
+      set: { value },
+    });
     return { key, value };
-  }
-
-  static async getCronEnabled(): Promise<boolean> {
-    const setting = await Settings.get("cron_enabled");
-    return setting?.value === "true";
   }
 }

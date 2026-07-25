@@ -1,25 +1,22 @@
 "use client";
 
 import { Logo } from "@/app/icons/logo";
-import { useSyncRouter, useTriggerOnlineCheck, useRestartNetwork } from "../RegisteredDevicesSection/useDevices";
-import { useSettingsQuery, useUpdateSetting } from "@/app/hooks/useSettings";
+import {
+  useSyncRouter,
+  useTriggerOnlineCheck,
+  useRestartNetwork,
+} from "../RegisteredDevicesSection/useDevices";
 import { VscSync, VscCheck, VscDebugRestart } from "react-icons/vsc";
 
 export function Header() {
   const { mutate: syncRouter, isPending } = useSyncRouter();
-  const { mutate: triggerCheck, isPending: isTriggering } = useTriggerOnlineCheck();
-  const { mutate: restartNetwork, isPending: isRestarting } = useRestartNetwork();
-  const { data: settings } = useSettingsQuery();
-  const { mutate: updateSetting, isPending: isUpdatingSetting } = useUpdateSetting();
-
-  const cronEnabled = settings?.find((s) => s.key === "cron_enabled")?.value === "true";
-
-  const handleToggleCron = () => {
-    updateSetting({ key: "cron_enabled", body: { value: cronEnabled ? "false" : "true" } });
-  };
+  const { mutate: triggerCheck, isPending: isTriggering } =
+    useTriggerOnlineCheck();
+  const { mutate: restartNetwork, isPending: isRestarting } =
+    useRestartNetwork();
 
   return (
-    <header className="flex items-center justify-between bg-primary px-12 py-4 text-white">
+    <header className="flex justify-between items-center bg-primary px-12 py-4 text-white">
       <div className="flex items-center">
         <Logo height={45} mode="white" />
         <h1 className="pl-12 font-semibold text-xl">
@@ -27,21 +24,8 @@ export function Header() {
         </h1>
       </div>
       <div className="flex gap-2">
-        <div className="flex items-center gap-2">
-          <span className="text-sm">Cron:</span>
-          <input
-            type="checkbox"
-            className="toggle toggle-sm toggle-success"
-            checked={cronEnabled}
-            onChange={handleToggleCron}
-            disabled={isUpdatingSetting}
-          />
-          <span className="text-sm">
-            {isUpdatingSetting ? "..." : cronEnabled ? "Ativado" : "Desativado"}
-          </span>
-        </div>
         <button
-          className="btn btn-sm btn-ghost text-white"
+          className="text-white btn btn-sm btn-ghost"
           onClick={() => triggerCheck()}
           disabled={isTriggering}
         >
@@ -53,7 +37,7 @@ export function Header() {
           Verificar Dispositivos
         </button>
         <button
-          className="btn btn-sm btn-ghost text-white"
+          className="text-white btn btn-sm btn-ghost"
           onClick={() => syncRouter()}
           disabled={isPending}
         >
@@ -65,7 +49,7 @@ export function Header() {
           Sincronizar
         </button>
         <button
-          className="btn btn-sm btn-ghost text-white"
+          className="text-white btn btn-sm btn-ghost"
           onClick={() => restartNetwork()}
           disabled={isRestarting}
         >
