@@ -18,8 +18,19 @@ async function createPage(endpoint: string) {
   const browser = await puppeteer.connect({
     browserURL: BROWSER_URL!,
   });
-  const page = await browser.newPage();
-  await page.goto(endpoint);
+  let page: import("puppeteer-core").Page;
+  try {
+    page = await browser.newPage();
+    await page.goto(endpoint);
+  } catch (error) {
+    try {
+      await page!.close();
+    } catch {
+      // page not created or already closed
+    }
+    browser.disconnect();
+    throw error;
+  }
 
   const cleanup = async () => {
     try {
@@ -34,7 +45,7 @@ async function createPage(endpoint: string) {
     }
   };
 
-  return { browser, page, cleanup };
+  return { page, cleanup };
 }
 
 async function evaluate<T>(
@@ -312,8 +323,10 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page, cleanup } = await createPage(`http://${controller.ip}`);
+    let session: Awaited<ReturnType<typeof createPage>> | undefined;
     try {
+      session = await createPage(`http://${controller.ip}`);
+      const { page } = session;
       await this.login(page, controller.password);
 
       const results = await this.getConnectedEasyMeshDevices(page);
@@ -321,7 +334,7 @@ export class Router {
       results.push(...(await this.getConnectedWiredDevices(page)));
       return results.filter((result) => result.ip !== "");
     } finally {
-      await cleanup();
+      await session?.cleanup();
       this.release();
     }
   }
@@ -335,8 +348,10 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page, cleanup } = await createPage(`http://${controller.ip}`);
+    let session: Awaited<ReturnType<typeof createPage>> | undefined;
     try {
+      session = await createPage(`http://${controller.ip}`);
+      const { page } = session;
       await this.login(page, controller.password);
 
       const DEV2_DHCPV4_POOL_STATICADDR = await evaluate<
@@ -365,7 +380,7 @@ export class Router {
         entryId: e.stack,
       }));
     } finally {
-      await cleanup();
+      await session?.cleanup();
       this.release();
     }
   }
@@ -379,8 +394,10 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page, cleanup } = await createPage(`http://${controller.ip}`);
+    let session: Awaited<ReturnType<typeof createPage>> | undefined;
     try {
+      session = await createPage(`http://${controller.ip}`);
+      const { page } = session;
       await this.login(page, controller.password);
 
       const result = await evaluate<{ stack: string }>(
@@ -408,7 +425,7 @@ export class Router {
 
       return result.stack;
     } finally {
-      await cleanup();
+      await session?.cleanup();
       this.release();
     }
   }
@@ -422,8 +439,10 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page, cleanup } = await createPage(`http://${controller.ip}`);
+    let session: Awaited<ReturnType<typeof createPage>> | undefined;
     try {
+      session = await createPage(`http://${controller.ip}`);
+      const { page } = session;
       await this.login(page, controller.password);
       await evaluate<void>(
         page,
@@ -445,7 +464,7 @@ export class Router {
         })(${JSON.stringify(JSON.stringify({ id }))})`,
       );
     } finally {
-      await cleanup();
+      await session?.cleanup();
       this.release();
     }
   }
@@ -459,8 +478,10 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page, cleanup } = await createPage(`http://${controller.ip}`);
+    let session: Awaited<ReturnType<typeof createPage>> | undefined;
     try {
+      session = await createPage(`http://${controller.ip}`);
+      const { page } = session;
       await this.login(page, controller.password);
 
       const chains = await evaluate<
@@ -494,7 +515,7 @@ export class Router {
         stack: c.stack,
       }));
     } finally {
-      await cleanup();
+      await session?.cleanup();
       this.release();
     }
   }
@@ -508,8 +529,10 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page, cleanup } = await createPage(`http://${controller.ip}`);
+    let session: Awaited<ReturnType<typeof createPage>> | undefined;
     try {
+      session = await createPage(`http://${controller.ip}`);
+      const { page } = session;
       await this.login(page, controller.password);
 
       const rules = await evaluate<
@@ -551,7 +574,7 @@ export class Router {
 
       return rules;
     } finally {
-      await cleanup();
+      await session?.cleanup();
       this.release();
     }
   }
@@ -571,8 +594,10 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page, cleanup } = await createPage(`http://${controller.ip}`);
+    let session: Awaited<ReturnType<typeof createPage>> | undefined;
     try {
+      session = await createPage(`http://${controller.ip}`);
+      const { page } = session;
       await this.login(page, controller.password);
 
       const result = await evaluate<{ stack: string }>(
@@ -607,7 +632,7 @@ export class Router {
 
       return result.stack;
     } finally {
-      await cleanup();
+      await session?.cleanup();
       this.release();
     }
   }
@@ -621,8 +646,10 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page, cleanup } = await createPage(`http://${controller.ip}`);
+    let session: Awaited<ReturnType<typeof createPage>> | undefined;
     try {
+      session = await createPage(`http://${controller.ip}`);
+      const { page } = session;
       await this.login(page, controller.password);
       await evaluate<void>(
         page,
@@ -644,7 +671,7 @@ export class Router {
         })(${JSON.stringify(JSON.stringify({ ruleStack }))})`,
       );
     } finally {
-      await cleanup();
+      await session?.cleanup();
       this.release();
     }
   }
@@ -656,21 +683,25 @@ export class Router {
       const controller = allRouters.find((r) => r.isController);
       const agents = allRouters.filter((r) => !r.isController);
       for (const agent of agents) {
-        const { page, cleanup } = await createPage(`http://${agent.ip}`);
+        let session: Awaited<ReturnType<typeof createPage>> | undefined;
         try {
+          session = await createPage(`http://${agent.ip}`);
+          const { page } = session;
           await this.login(page, agent.password);
           await rebootRouter(page);
         } finally {
-          await cleanup();
+          await session?.cleanup();
         }
       }
       if (controller) {
-        const { page, cleanup } = await createPage(`http://${controller.ip}`);
+        let session: Awaited<ReturnType<typeof createPage>> | undefined;
         try {
+          session = await createPage(`http://${controller.ip}`);
+          const { page } = session;
           await this.login(page, controller.password);
           await rebootRouter(page);
         } finally {
-          await cleanup();
+          await session?.cleanup();
         }
       }
     } finally {
@@ -678,11 +709,3 @@ export class Router {
     }
   }
 }
-
-const cleanupBrowser = () => {
-  // Cleanup is handled per-page via the cleanup function returned by createPage
-  process.exit(0);
-};
-
-process.on("SIGTERM", cleanupBrowser);
-process.on("SIGINT", cleanupBrowser);
