@@ -57,21 +57,36 @@ async function evaluate<T>(
 }
 
 async function rebootRouter(page: import("puppeteer-core").Page): Promise<void> {
-  await evaluate<void>(
-    page,
-    `(function reboot(){
-      return new Promise((resolve, reject)=>{
-        $.dm.op({
-          oid: "ACT_REBOOT",
-          callback: {
-            success: ()=>resolve(),
-            fail: (err)=>reject(err),
-            error: (err)=>reject(err)
-          }
-        })
-      })
-    })()`,
-  );
+  const timeoutMs = 30_000;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    await Promise.race([
+      evaluate<void>(
+        page,
+        `(function reboot(){
+          return new Promise((resolve, reject)=>{
+            $.dm.op({
+              oid: "ACT_REBOOT",
+              callback: {
+                success: ()=>resolve(),
+                fail: (err)=>reject(err),
+                error: (err)=>reject(err)
+              }
+            })
+          })
+        })()`,
+      ),
+      new Promise<void>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error(`Router reboot timed out after ${timeoutMs}ms`)),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 export class Router {
