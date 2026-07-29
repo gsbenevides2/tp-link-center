@@ -12,16 +12,31 @@ if (!BROWSER_URL) throw new Error("Missing BROWSER_URL");
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+const LOGIN_TIMEOUT_MS = 30_000;
+
 async function createPage(endpoint: string) {
   const browser = await puppeteer.connect({
     browserURL: BROWSER_URL!,
   });
   const page = await browser.newPage();
   await page.goto(endpoint);
-  return { browser, page };
+
+  const cleanup = async () => {
+    try {
+      await page.close();
+    } catch {
+      // page already closed
+    }
+    try {
+      browser.disconnect();
+    } catch {
+      // browser already disconnected
+    }
+  };
+
+  return { browser, page, cleanup };
 }
 
-// puppeteer's string overload constrains T to unknown[], so we cast
 async function evaluate<T>(
   page: import("puppeteer-core").Page,
   script: string,
@@ -30,22 +45,50 @@ async function evaluate<T>(
   return page.evaluate(script) as any as Promise<T>;
 }
 
+async function rebootRouter(page: import("puppeteer-core").Page): Promise<void> {
+  await evaluate<void>(
+    page,
+    `(function reboot(){
+      return new Promise((resolve, reject)=>{
+        $.dm.op({
+          oid: "ACT_REBOOT",
+          callback: {
+            success: ()=>resolve(),
+            fail: (err)=>reject(err),
+            error: (err)=>reject(err)
+          }
+        })
+      })
+    })()`,
+  );
+}
+
 export class Router {
-  static processQueue: string[] = [];
+  private static processQueue: Array<{
+    id: string;
+    resolve: () => void;
+  }> = [];
 
   private static vendorCache = new Map<string, string>();
 
-  private static async waitRelease() {
+  private static async waitRelease(): Promise<void> {
     const processId = crypto.randomUUID();
-    this.processQueue.push(processId);
-    while (true) {
-      if (this.processQueue.at(0) === processId) break;
-      await wait(100);
+    let resolve!: () => void;
+    const promise = new Promise<void>((r) => {
+      resolve = r;
+    });
+    this.processQueue.push({ id: processId, resolve });
+    if (this.processQueue[0].id === processId) {
+      return;
     }
+    await promise;
   }
 
-  private static async release() {
+  private static release() {
     this.processQueue.shift();
+    if (this.processQueue.length > 0) {
+      this.processQueue[0].resolve();
+    }
   }
 
   private static async login(
@@ -67,7 +110,8 @@ export class Router {
     await wait(100);
     await evaluate(page, `$("#pc-login-btn").click()`);
 
-    while (true) {
+    const deadline = Date.now() + LOGIN_TIMEOUT_MS;
+    while (Date.now() < deadline) {
       await wait(100);
       const isInvalid = await evaluate<boolean>(
         page,
@@ -85,8 +129,9 @@ export class Router {
         page,
         `$("#topReboot").is(":visible")`,
       ).catch(() => false);
-      if (isLogged) break;
+      if (isLogged) return;
     }
+    throw new Error(`Login timeout after ${LOGIN_TIMEOUT_MS}ms for: ${page.url()}`);
   }
 
   private static getVendorCached(mac: string): string {
@@ -267,7 +312,7 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(`http://${controller.ip}`);
+    const { page, cleanup } = await createPage(`http://${controller.ip}`);
     try {
       await this.login(page, controller.password);
 
@@ -276,8 +321,8 @@ export class Router {
       results.push(...(await this.getConnectedWiredDevices(page)));
       return results.filter((result) => result.ip !== "");
     } finally {
-      await page.close();
-      await this.release();
+      await cleanup();
+      this.release();
     }
   }
 
@@ -290,7 +335,7 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(`http://${controller.ip}`);
+    const { page, cleanup } = await createPage(`http://${controller.ip}`);
     try {
       await this.login(page, controller.password);
 
@@ -320,9 +365,8 @@ export class Router {
         entryId: e.stack,
       }));
     } finally {
-      await page.close();
-
-      await this.release();
+      await cleanup();
+      this.release();
     }
   }
 
@@ -335,37 +379,37 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(`http://${controller.ip}`);
+    const { page, cleanup } = await createPage(`http://${controller.ip}`);
     try {
       await this.login(page, controller.password);
 
-      const DEV2_DHCPV4_POOL_STATICADDR = await evaluate<{
-        stack: string;
-      }>(
+      const result = await evaluate<{ stack: string }>(
         page,
-        `(function routers(){
-        return new Promise(resolve=>{
+        `(function(params){
+          var parsed = JSON.parse(params);
+          return new Promise(function(resolve, reject){
             $.dm.add({
-                oid: "DEV2_DHCPV4_POOL_STATICADDR",
-                data: {
-                    chaddr: "${mac}",
-                    yiaddr: "${ip}",
-                    enable: "1",
-                    pstack: "1,0,0,0,0,0"
-                },
-                callback: {
-                    success: (data)=>resolve(data)
-                }
+              oid: "DEV2_DHCPV4_POOL_STATICADDR",
+              data: {
+                chaddr: parsed.mac,
+                yiaddr: parsed.ip,
+                enable: "1",
+                pstack: "1,0,0,0,0,0"
+              },
+              callback: {
+                success: function(data){ resolve(data) },
+                fail: function(err){ reject(err) },
+                error: function(err){ reject(err) }
+              }
             })
-            })
-        })()`,
+          })
+        })(${JSON.stringify(JSON.stringify({ mac, ip }))})`,
       );
 
-      return DEV2_DHCPV4_POOL_STATICADDR.stack;
+      return result.stack;
     } finally {
-      await page.close();
-
-      await this.release();
+      await cleanup();
+      this.release();
     }
   }
 
@@ -378,29 +422,31 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(`http://${controller.ip}`);
+    const { page, cleanup } = await createPage(`http://${controller.ip}`);
     try {
       await this.login(page, controller.password);
       await evaluate<void>(
         page,
-        `(function routers(){
-        return new Promise(resolve=>{
+        `(function(params){
+          var parsed = JSON.parse(params);
+          return new Promise(function(resolve, reject){
             $.dm.del({
-                oid: "DEV2_DHCPV4_POOL_STATICADDR",
-                data: {
-                    stack: "${id}"
-                },
-                callback: {
-                    success: ()=>resolve()
-                }
+              oid: "DEV2_DHCPV4_POOL_STATICADDR",
+              data: {
+                stack: parsed.id
+              },
+              callback: {
+                success: function(){ resolve() },
+                fail: function(err){ reject(err) },
+                error: function(err){ reject(err) }
+              }
             })
-            })
-        })()`,
+          })
+        })(${JSON.stringify(JSON.stringify({ id }))})`,
       );
     } finally {
-      await page.close();
-
-      await this.release();
+      await cleanup();
+      this.release();
     }
   }
 
@@ -413,7 +459,7 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(`http://${controller.ip}`);
+    const { page, cleanup } = await createPage(`http://${controller.ip}`);
     try {
       await this.login(page, controller.password);
 
@@ -448,9 +494,8 @@ export class Router {
         stack: c.stack,
       }));
     } finally {
-      await page.close();
-
-      await this.release();
+      await cleanup();
+      this.release();
     }
   }
 
@@ -463,7 +508,7 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(`http://${controller.ip}`);
+    const { page, cleanup } = await createPage(`http://${controller.ip}`);
     try {
       await this.login(page, controller.password);
 
@@ -506,9 +551,8 @@ export class Router {
 
       return rules;
     } finally {
-      await page.close();
-
-      await this.release();
+      await cleanup();
+      this.release();
     }
   }
 
@@ -527,43 +571,44 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(`http://${controller.ip}`);
+    const { page, cleanup } = await createPage(`http://${controller.ip}`);
     try {
       await this.login(page, controller.password);
 
-      const result = await evaluate<{
-        stack: string;
-      }>(
+      const result = await evaluate<{ stack: string }>(
         page,
-        `(function routers(){
-        return new Promise((resolve, reject)=>{
+        `(function(params){
+          var p = JSON.parse(params);
+          return new Promise(function(resolve, reject){
+            var data = {
+              enable: 1,
+              X_TP_RuleType: 2,
+              X_TP_RuleName: p.name,
+              X_TP_SourceType: 2,
+              X_TP_SourceMACAddress: p.sourceMAC,
+              pstack: p.chainStack,
+              target: p.target || "Drop"
+            };
+            if (p.sourceIP) {
+              data.sourceIP = p.sourceIP;
+            }
             $.dm.add({
-                oid: "DEV2_FW_CHAIN_RULE",
-                data: {
-                    enable: 1,
-                    X_TP_RuleType: 2,
-                    X_TP_RuleName: "${params.name}",
-                    X_TP_SourceType: 2,
-                    ${params.sourceIP ? `sourceIP: "${params.sourceIP}",` : ""}
-                    X_TP_SourceMACAddress: "${params.sourceMAC}",
-                    pstack: "${params.chainStack}",
-                    target: "${params.target ?? "Drop"}"
-                },
-                callback: {
-                    success: (data)=>resolve(data),
-                    fail: (error)=>reject(error),
-                    error: (error)=>reject(error)
-                }
+              oid: "DEV2_FW_CHAIN_RULE",
+              data: data,
+              callback: {
+                success: function(data){ resolve(data) },
+                fail: function(err){ reject(err) },
+                error: function(err){ reject(err) }
+              }
             })
-            })
-        })()`,
+          })
+        })(${JSON.stringify(JSON.stringify(params))})`,
       );
 
       return result.stack;
     } finally {
-      await page.close();
-
-      await this.release();
+      await cleanup();
+      this.release();
     }
   }
 
@@ -576,31 +621,31 @@ export class Router {
     }
 
     await this.waitRelease();
-    const { page } = await createPage(`http://${controller.ip}`);
+    const { page, cleanup } = await createPage(`http://${controller.ip}`);
     try {
       await this.login(page, controller.password);
       await evaluate<void>(
         page,
-        `(function routers(){
-        return new Promise((resolve, reject)=>{
+        `(function(params){
+          var parsed = JSON.parse(params);
+          return new Promise(function(resolve, reject){
             $.dm.del({
-                oid: "DEV2_FW_CHAIN_RULE",
-                data: {
-                    stack: "${ruleStack}"
-                },
-                callback: {
-                    success: ()=>resolve(),
-                    fail: (error)=>reject(error),
-                    error: (error)=>reject(error)
-                }
+              oid: "DEV2_FW_CHAIN_RULE",
+              data: {
+                stack: parsed.ruleStack
+              },
+              callback: {
+                success: function(){ resolve() },
+                fail: function(err){ reject(err) },
+                error: function(err){ reject(err) }
+              }
             })
-            })
-        })()`,
+          })
+        })(${JSON.stringify(JSON.stringify({ ruleStack }))})`,
       );
     } finally {
-      await page.close();
-
-      await this.release();
+      await cleanup();
+      this.release();
     }
   }
 
@@ -611,39 +656,33 @@ export class Router {
       const controller = allRouters.find((r) => r.isController);
       const agents = allRouters.filter((r) => !r.isController);
       for (const agent of agents) {
-        const { page } = await createPage(`http://${agent.ip}`);
+        const { page, cleanup } = await createPage(`http://${agent.ip}`);
         try {
           await this.login(page, agent.password);
-          await evaluate<void>(
-            page,
-            `(function routers(){
-            $.dm.op({
-                oid: "ACT_REBOOT"
-            })
-        })()`,
-          );
+          await rebootRouter(page);
         } finally {
-          await page.close();
+          await cleanup();
         }
       }
       if (controller) {
-        const { page } = await createPage(`http://${controller.ip}`);
+        const { page, cleanup } = await createPage(`http://${controller.ip}`);
         try {
           await this.login(page, controller.password);
-          await evaluate<void>(
-            page,
-            `(function routers(){
-            $.dm.op({
-                oid: "ACT_REBOOT"
-            })
-        })()`,
-          );
+          await rebootRouter(page);
         } finally {
-          await page.close();
+          await cleanup();
         }
       }
     } finally {
-      await this.release();
+      this.release();
     }
   }
 }
+
+const cleanupBrowser = () => {
+  // Cleanup is handled per-page via the cleanup function returned by createPage
+  process.exit(0);
+};
+
+process.on("SIGTERM", cleanupBrowser);
+process.on("SIGINT", cleanupBrowser);
