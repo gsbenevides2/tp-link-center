@@ -210,3 +210,15 @@ export function useRestartNetwork() {
     },
   });
 }
+
+export function useRouterStatusQuery() {
+  return useQuery({
+    queryKey: ["router-status"],
+    queryFn: async () => {
+      const response = await clientSideApi.router.status.get();
+      if (response.error) throw response.error;
+      return response.data;
+    },
+    refetchInterval: 30_000,
+  });
+}

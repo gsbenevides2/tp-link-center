@@ -154,6 +154,22 @@ export const router = new Elysia({
       },
     },
   )
+  .get(
+    "/status",
+    async () => {
+      return status(StatusMap.OK, await Router.getStatus());
+    },
+    {
+      detail: {
+        summary: "Get Router Status",
+        description:
+          "Get current router status including WAN IP, uptime, and performance metrics.",
+      },
+      response: {
+        [StatusMap.OK]: RouterModel.getRouterStatusResponse,
+      },
+    },
+  )
   .post(
     "/restart-network",
     async () => {

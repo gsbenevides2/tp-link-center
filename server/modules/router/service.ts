@@ -1,12 +1,21 @@
-import puppeteer from "puppeteer-core";
+import puppeteer, { type Page } from "puppeteer-core";
 import { RouterModel } from "./model";
 import getVendor from "mac-oui-lookup";
 import { Device } from "../devices/service";
+import {
+  DEV2_ADT_WAN,
+  DEV2_DEV_INFO,
+  DEV2_MEM_STATUS,
+  DEV2_PROC_STATUS,
+  DEV2_WIFI_APDEV,
+  DEV2_WIFI_APDEV_ASSOCDEV,
+} from "./types";
 
 const { BROWSER_URL } = process.env;
 
 type ConnectedDevices = RouterModel["getConnectedDevicesResponse"];
 type DhcpEntries = RouterModel["listDHCPEntryResponse"];
+type RouterStatus = RouterModel["getRouterStatusResponse"];
 
 if (!BROWSER_URL) throw new Error("Missing BROWSER_URL");
 
@@ -18,7 +27,7 @@ async function createPage(endpoint: string) {
   const browser = await puppeteer.connect({
     browserURL: BROWSER_URL!,
   });
-  let page: import("puppeteer-core").Page;
+  let page: Page;
   try {
     page = await browser.newPage();
     await page.goto(endpoint);
@@ -46,47 +55,6 @@ async function createPage(endpoint: string) {
   };
 
   return { page, cleanup };
-}
-
-async function evaluate<T>(
-  page: import("puppeteer-core").Page,
-  script: string,
-): Promise<T> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return page.evaluate(script) as any as Promise<T>;
-}
-
-async function rebootRouter(page: import("puppeteer-core").Page): Promise<void> {
-  const timeoutMs = 30_000;
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-
-  try {
-    await Promise.race([
-      evaluate<void>(
-        page,
-        `(function reboot(){
-          return new Promise((resolve, reject)=>{
-            $.dm.op({
-              oid: "ACT_REBOOT",
-              callback: {
-                success: ()=>resolve(),
-                fail: (err)=>reject(err),
-                error: (err)=>reject(err)
-              }
-            })
-          })
-        })()`,
-      ),
-      new Promise<void>((_, reject) => {
-        timeout = setTimeout(
-          () => reject(new Error(`Router reboot timed out after ${timeoutMs}ms`)),
-          timeoutMs,
-        );
-      }),
-    ]);
-  } finally {
-    if (timeout) clearTimeout(timeout);
-  }
 }
 
 export class Router {
@@ -117,12 +85,9 @@ export class Router {
     }
   }
 
-  private static async login(
-    page: import("puppeteer-core").Page,
-    password: string,
-  ) {
+  private static async login(page: Page, password: string) {
     await wait(200);
-    const isLoggedOut = await evaluate<boolean>(
+    const isLoggedOut = await this.evaluate<boolean>(
       page,
       `$("#pc-login-password").is(":visible")`,
     );
@@ -134,30 +99,59 @@ export class Router {
       if (input) input.value = pwd;
     }, password);
     await wait(100);
-    await evaluate(page, `$("#pc-login-btn").click()`);
+    await this.evaluate(page, `$("#pc-login-btn").click()`);
 
     const deadline = Date.now() + LOGIN_TIMEOUT_MS;
     while (Date.now() < deadline) {
       await wait(100);
-      const isInvalid = await evaluate<boolean>(
+      const isInvalid = await this.evaluate<boolean>(
         page,
         `$(".content.error-tips-content").is(":visible")`,
       ).catch(() => false);
       if (isInvalid) throw new Error("Password is Invalid for: " + page.url());
-      const isForcing = await evaluate<boolean>(
+      const isForcing = await this.evaluate<boolean>(
         page,
         `$("#confirm-yes").is(":visible")`,
       ).catch(() => false);
       if (isForcing) {
-        await evaluate(page, `$("#confirm-yes").click()`);
+        await this.evaluate(page, `$("#confirm-yes").click()`);
       }
-      const isLogged = await evaluate<boolean>(
+      const isLogged = await this.evaluate<boolean>(
         page,
         `$("#topReboot").is(":visible")`,
       ).catch(() => false);
       if (isLogged) return;
     }
-    throw new Error(`Login timeout after ${LOGIN_TIMEOUT_MS}ms for: ${page.url()}`);
+    throw new Error(
+      `Login timeout after ${LOGIN_TIMEOUT_MS}ms for: ${page.url()}`,
+    );
+  }
+
+  private static async evaluate<T>(page: Page, script: string): Promise<T> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return page.evaluate(script) as any as Promise<T>;
+  }
+
+  private static async makeDmCall<T>(
+    method: string,
+    oid: string,
+    data: Record<string, unknown>,
+    page: Page,
+  ): Promise<T> {
+    const str = `(function(){
+      return new Promise((resolve, reject)=>{
+        $.dm.${method}({
+          oid: "${oid}",
+          data: ${JSON.stringify(data)},
+          callback: {
+            success: (data)=>resolve(data),
+            fail: (err)=>reject(err),
+            error: (err)=>reject(err)
+          }
+        })
+      `;
+    const response = await this.evaluate<T>(page, str);
+    return response;
   }
 
   private static getVendorCached(mac: string): string {
@@ -169,29 +163,13 @@ export class Router {
   }
 
   private static async getConnectedEasyMeshDevices(
-    page: import("puppeteer-core").Page,
+    page: Page,
   ): Promise<ConnectedDevices> {
-    const DEV2_WIFI_APDEV = await evaluate<
-      Array<{
-        MACAddress: string;
-        X_TP_IPAddress: string;
-        backhaulLinkType: string;
-        X_TP_HostName: string;
-        X_TP_Active: string;
-      }>
-    >(
+    const DEV2_WIFI_APDEV = await this.makeDmCall<DEV2_WIFI_APDEV[]>(
+      "getList",
+      "DEV2_WIFI_APDEV",
+      {},
       page,
-      `(function routers(){
-        return new Promise(resolve=>{
-            $.dm.getList({
-                oid: "DEV2_WIFI_APDEV",
-                data: {},
-                callback: {
-                    success: (data)=>resolve(data)
-                }
-            })
-            })
-        })()`,
     );
 
     function processBackLinkType(type: string) {
@@ -220,31 +198,13 @@ export class Router {
   }
 
   private static async getConnectedWifiDevices(
-    page: import("puppeteer-core").Page,
+    page: Page,
   ): Promise<ConnectedDevices> {
-    const DEV2_WIFI_APDEV_ASSOCDEV = await evaluate<
-      Array<{
-        X_TP_HostName: string;
-        X_TP_RadioMac: string;
-        X_TP_IPAddress: string;
-        MACAddress: string;
-        active: string;
-      }>
-    >(
-      page,
-      `(function routers(){
-        return new Promise(resolve=>{
-            $.dm.getList({
-                oid: "DEV2_WIFI_APDEV_ASSOCDEV",
-                data: {},
-                callback: {
-                    success: (data)=>resolve(data)
-                }
-            })
-            })
-        })()`,
-    );
-    const DEV2_WIFI_APDEV_RADIO = await evaluate<
+    const DEV2_WIFI_APDEV_ASSOCDEV = await this.makeDmCall<
+      DEV2_WIFI_APDEV_ASSOCDEV[]
+    >("getList", "DEV2_WIFI_APDEV_ASSOCDEV", {}, page);
+
+    const DEV2_WIFI_APDEV_RADIO = await this.evaluate<
       Array<{
         channel: string;
         operatingFrequencyBand: string;
@@ -288,10 +248,44 @@ export class Router {
     );
   }
 
+  private static async rebootRouter(page: Page): Promise<void> {
+    const timeoutMs = 30_000;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      await Promise.race([
+        this.evaluate<void>(
+          page,
+          `(function reboot(){
+          return new Promise((resolve, reject)=>{
+            $.dm.op({
+              oid: "ACT_REBOOT",
+              callback: {
+                success: ()=>resolve(),
+                fail: (err)=>reject(err),
+                error: (err)=>reject(err)
+              }
+            })
+          })
+        })()`,
+        ),
+        new Promise<void>((_, reject) => {
+          timeout = setTimeout(
+            () =>
+              reject(new Error(`Router reboot timed out after ${timeoutMs}ms`)),
+            timeoutMs,
+          );
+        }),
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+  }
+
   private static async getConnectedWiredDevices(
-    page: import("puppeteer-core").Page,
+    page: Page,
   ): Promise<ConnectedDevices> {
-    const DEV2_WIFI_APDEV_ETHASSOCDEV = await evaluate<
+    const DEV2_WIFI_APDEV_ETHASSOCDEV = await this.evaluate<
       Array<{
         IPAddress: string;
         X_TP_HostName: string;
@@ -369,7 +363,7 @@ export class Router {
       const { page } = session;
       await this.login(page, controller.password);
 
-      const DEV2_DHCPV4_POOL_STATICADDR = await evaluate<
+      const DEV2_DHCPV4_POOL_STATICADDR = await this.evaluate<
         Array<{
           yiaddr: string;
           chaddr: string;
@@ -415,7 +409,7 @@ export class Router {
       const { page } = session;
       await this.login(page, controller.password);
 
-      const result = await evaluate<{ stack: string }>(
+      const result = await this.evaluate<{ stack: string }>(
         page,
         `(function(params){
           var parsed = JSON.parse(params);
@@ -459,7 +453,7 @@ export class Router {
       session = await createPage(`http://${controller.ip}`);
       const { page } = session;
       await this.login(page, controller.password);
-      await evaluate<void>(
+      await this.evaluate<void>(
         page,
         `(function(params){
           var parsed = JSON.parse(params);
@@ -499,7 +493,7 @@ export class Router {
       const { page } = session;
       await this.login(page, controller.password);
 
-      const chains = await evaluate<
+      const chains = await this.evaluate<
         Array<{
           name: string;
           enable: string;
@@ -550,7 +544,7 @@ export class Router {
       const { page } = session;
       await this.login(page, controller.password);
 
-      const rules = await evaluate<
+      const rules = await this.evaluate<
         Array<{
           ruleName: string;
           ruleType: string;
@@ -615,7 +609,7 @@ export class Router {
       const { page } = session;
       await this.login(page, controller.password);
 
-      const result = await evaluate<{ stack: string }>(
+      const result = await this.evaluate<{ stack: string }>(
         page,
         `(function(params){
           var p = JSON.parse(params);
@@ -666,7 +660,7 @@ export class Router {
       session = await createPage(`http://${controller.ip}`);
       const { page } = session;
       await this.login(page, controller.password);
-      await evaluate<void>(
+      await this.evaluate<void>(
         page,
         `(function(params){
           var parsed = JSON.parse(params);
@@ -703,7 +697,7 @@ export class Router {
           session = await createPage(`http://${agent.ip}`);
           const { page } = session;
           await this.login(page, agent.password);
-          await rebootRouter(page);
+          await this.rebootRouter(page);
         } finally {
           await session?.cleanup();
         }
@@ -714,12 +708,153 @@ export class Router {
           session = await createPage(`http://${controller.ip}`);
           const { page } = session;
           await this.login(page, controller.password);
-          await rebootRouter(page);
+          await this.rebootRouter(page);
         } finally {
           await session?.cleanup();
         }
       }
     } finally {
+      this.release();
+    }
+  }
+
+  static async getStatus(): Promise<RouterStatus> {
+    const controller = await Device.getControllerRouter();
+    if (!controller) {
+      throw new Error(
+        "No controller router registered. Please register a router controller first.",
+      );
+    }
+
+    await this.waitRelease();
+    let session: Awaited<ReturnType<typeof createPage>> | undefined;
+    try {
+      session = await createPage(`http://${controller.ip}`);
+      const { page } = session;
+      await this.login(page, controller.password);
+
+      // Fetch WAN connection info
+      const wanInfo = await this.evaluate<DEV2_ADT_WAN[]>(
+        page,
+        `(function(){
+          return new Promise(resolve=>{
+            $.dm.getList({
+              oid: "DEV2_ADT_WAN",
+              data: {},
+              callback: {
+                success: (data)=>resolve(data),
+                fail: ()=>resolve(null),
+                error: ()=>resolve(null)
+              }
+            })
+          })
+        })()`,
+      );
+
+      const wanIp = wanInfo.at(0)?.connIPv4Address ?? "";
+      const connectionStatus = wanInfo.at(0)?.connStatusV4;
+      const connectionUptime = Number(wanInfo.at(0)?.X_TP_Uptime);
+      const totalDownload = Number(wanInfo.at(0)?.X_TP_BytesReceived);
+      const totalUpload = Number(wanInfo.at(0)?.X_TP_BytesReceived);
+
+      // Fetch device info (uptime, firmware, hardware)
+      const devInfo = await this.evaluate<DEV2_DEV_INFO>(
+        page,
+        `(function(){
+          return new Promise(resolve=>{
+            $.dm.get({
+              oid: "DEV2_DEV_INFO",
+              data: {},
+              callback: {
+                success: (data)=>resolve(data),
+                fail: ()=>resolve(null),
+                error: ()=>resolve(null)
+              }
+            })
+          })
+        })()`,
+      );
+
+      const routerUptime = Number(devInfo.upTime);
+
+      const memoryStatus = await this.evaluate<DEV2_MEM_STATUS>(
+        page,
+        `(function(){
+          return new Promise(resolve=>{
+            $.dm.get({
+              oid: "DEV2_MEM_STATUS",
+              data: {},
+              callback: {
+                success: (data)=>resolve(data),
+                fail: ()=>resolve(null),
+                error: ()=>resolve(null)
+              }
+            })
+          })
+        })()`,
+      );
+
+      const freeMemory = Number(memoryStatus.free);
+      const totalMemory = Number(memoryStatus.total);
+      const usedMemory = totalMemory - freeMemory;
+      const memoryUsage = (usedMemory / totalMemory) * 100;
+
+      const procStatus = await this.evaluate<DEV2_PROC_STATUS>(
+        page,
+        `(function(){
+          return new Promise(resolve=>{
+            $.dm.get({
+              oid: "DEV2_PROC_STATUS",
+              data: {},
+              callback: {
+                success: (data)=>resolve(data),
+                fail: ()=>resolve(null),
+                error: ()=>resolve(null)
+              }
+            })
+          })
+        })()`,
+      );
+
+      const cpuUsage = Number(procStatus.CPUUsage);
+
+      // Helper to format seconds to human readable
+      const formatUptime = (totalSeconds: number): string => {
+        if (!totalSeconds) return "N/A";
+        const days = Math.floor(totalSeconds / 86400);
+        const hours = Math.floor((totalSeconds % 86400) / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const parts: string[] = [];
+        if (days > 0) parts.push(`${days}d`);
+        if (hours > 0) parts.push(`${hours}h`);
+        if (minutes > 0) parts.push(`${minutes}m`);
+        if (parts.length === 0) parts.push(`${totalSeconds}s`);
+        return parts.join(" ");
+      };
+
+      // Helper to format bytes to human readable
+      const formatBytes = (b: number): string => {
+        if (isNaN(b)) return "N/A";
+        if (b >= 1073741824) return `${(b / 1073741824).toFixed(1)} GB`;
+        if (b >= 1048576) return `${(b / 1048576).toFixed(1)} MB`;
+        if (b >= 1024) return `${(b / 1024).toFixed(1)} KB`;
+        return `${b} B`;
+      };
+
+      return {
+        wanIp,
+        connectionStatus: connectionStatus || "Unknown",
+        connectionUptime: formatUptime(connectionUptime),
+        routerUptime: formatUptime(routerUptime),
+        firmwareVersion: devInfo?.softwareVersion || "N/A",
+        hardwareVersion: devInfo?.hardwareVersion || "N/A",
+        cpuUsage,
+        memoryUsage,
+        totalDownload: formatBytes(totalDownload),
+        totalUpload: formatBytes(totalUpload),
+      };
+    } finally {
+      await session?.cleanup();
       this.release();
     }
   }
