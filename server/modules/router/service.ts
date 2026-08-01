@@ -16,7 +16,7 @@ import {
   DEV2_FW_CHAIN_RULE,
 } from "./types";
 
-const { BROWSER_URL } = process.env;
+const { BROWSER_URL, BROWSER_WSENDPOINT } = process.env;
 
 type ConnectedDevices = RouterModel["getConnectedDevicesResponse"];
 type DhcpEntries = RouterModel["listDHCPEntryResponse"];
@@ -31,6 +31,7 @@ const LOGIN_TIMEOUT_MS = 30_000;
 async function createPage(endpoint: string) {
   const browser = await puppeteer.connect({
     browserURL: BROWSER_URL!,
+    browserWSEndpoint: BROWSER_WSENDPOINT,
   });
   let page: Page;
   try {
