@@ -26,4 +26,3 @@ jobs:
         env: 
           DATABASE_URL: "#"
           ROUTER_PASSWORD_SECRET: "#"
-          BROWSER_URL: "#"
