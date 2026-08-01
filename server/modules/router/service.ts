@@ -1,4 +1,4 @@
-import puppeteer, { type Page } from "puppeteer-core";
+import puppeteer, { type Page, type Browser } from "puppeteer-core";
 import { RouterModel } from "./model";
 import getVendor from "mac-oui-lookup";
 import { Device } from "../devices/service";
@@ -24,39 +24,16 @@ type RouterStatus = RouterModel["getRouterStatusResponse"];
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const LOGIN_TIMEOUT_MS = 30_000;
-
-async function createPage(endpoint: string) {
-  const browser = await puppeteer.connect({
-    browserURL: BROWSER_URL,
-    browserWSEndpoint: BROWSER_WSENDPOINT,
-  });
-  let page: Page;
-  try {
-    page = await browser.newPage();
-    await page.goto(endpoint);
-  } catch (error) {
-    try {
-      await page!.close();
-    } catch {}
-    throw error;
-  }
-
-  const cleanup = async () => {
-    try {
-      await page.close();
-    } catch {}
-  };
-
-  return { page, cleanup };
-}
-
 export class Router {
+  private static browser: Browser | null = null;
   private static processQueue: Array<{
     id: string;
     resolve: () => void;
   }> = [];
 
   private static vendorCache = new Map<string, string>();
+
+  private static pageList = new Map<string, Page>();
 
   private static async waitRelease(): Promise<void> {
     const processId = crypto.randomUUID();
@@ -71,11 +48,56 @@ export class Router {
     await promise;
   }
 
+  private static async getBrowser(): Promise<Browser> {
+    if (this.browser && this.browser.connected) {
+      return this.browser;
+    }
+    const browser = await puppeteer.connect({
+      browserURL: BROWSER_URL,
+      browserWSEndpoint: BROWSER_WSENDPOINT,
+    });
+    this.browser?.on("disconnected", () => {
+      this.browser = null;
+      this.pageList.clear();
+    });
+    this.browser = browser;
+    return browser;
+  }
+
+  private static async getPage(ip: string, password: string): Promise<Page> {
+    const pageInCache = this.pageList.get(ip);
+    if (
+      pageInCache &&
+      pageInCache.isClosed() === false &&
+      pageInCache.browser().connected
+    ) {
+      if (!this.isLoggedIn(pageInCache)) {
+        await this.login(pageInCache, password);
+      }
+      return pageInCache;
+    }
+    const url = `http://${ip}`;
+    const browser = await this.getBrowser();
+    const page = await browser.newPage();
+    await page.goto(url);
+    await this.login(page, password);
+    this.pageList.set(ip, page);
+    return page;
+  }
+
   private static release() {
     this.processQueue.shift();
     if (this.processQueue.length > 0) {
       this.processQueue[0].resolve();
     }
+  }
+
+  private static async isLoggedIn(page: Page): Promise<boolean> {
+    const isLoggedOut = await this.evaluate<boolean>(
+      page,
+      `$("#pc-login-password").is(":visible")`,
+    );
+    return !isLoggedOut;
   }
 
   private static async login(page: Page, password: string) {
@@ -274,11 +296,8 @@ export class Router {
     }
 
     await this.waitRelease();
-    let session: Awaited<ReturnType<typeof createPage>> | undefined;
     try {
-      session = await createPage(`http://${controller.ip}`);
-      const { page } = session;
-      await this.login(page, controller.password);
+      const page = await this.getPage(controller.ip, controller.password);
       const result = await Promise.all([
         this.getConnectedEasyMeshDevices(page),
         this.getConnectedWifiDevices(page),
@@ -286,7 +305,6 @@ export class Router {
       ]);
       return result.flat().filter((result) => result.ip !== "");
     } finally {
-      await session?.cleanup();
       this.release();
     }
   }
@@ -300,11 +318,8 @@ export class Router {
     }
 
     await this.waitRelease();
-    let session: Awaited<ReturnType<typeof createPage>> | undefined;
     try {
-      session = await createPage(`http://${controller.ip}`);
-      const { page } = session;
-      await this.login(page, controller.password);
+      const page = await this.getPage(controller.ip, controller.password);
 
       const DEV2_DHCPV4_POOL_STATICADDR = await this.makeDmCall<
         DEV2_DHCPV4_POOL_STATICADDR[]
@@ -315,7 +330,6 @@ export class Router {
         entryId: e.stack,
       }));
     } finally {
-      await session?.cleanup();
       this.release();
     }
   }
@@ -329,11 +343,8 @@ export class Router {
     }
 
     await this.waitRelease();
-    let session: Awaited<ReturnType<typeof createPage>> | undefined;
     try {
-      session = await createPage(`http://${controller.ip}`);
-      const { page } = session;
-      await this.login(page, controller.password);
+      const page = await this.getPage(controller.ip, controller.password);
 
       const result = await this.makeDmCall<{ stack: string }>(
         "add",
@@ -349,7 +360,6 @@ export class Router {
 
       return result.stack;
     } finally {
-      await session?.cleanup();
       this.release();
     }
   }
@@ -361,13 +371,10 @@ export class Router {
         "No controller router registered. Please register a router controller first.",
       );
     }
-
     await this.waitRelease();
-    let session: Awaited<ReturnType<typeof createPage>> | undefined;
+
     try {
-      session = await createPage(`http://${controller.ip}`);
-      const { page } = session;
-      await this.login(page, controller.password);
+      const page = await this.getPage(controller.ip, controller.password);
       await this.makeDmCall<void>(
         "del",
         "DEV2_DHCPV4_POOL_STATICADDR",
@@ -375,7 +382,6 @@ export class Router {
         page,
       );
     } finally {
-      await session?.cleanup();
       this.release();
     }
   }
@@ -389,11 +395,8 @@ export class Router {
     }
 
     await this.waitRelease();
-    let session: Awaited<ReturnType<typeof createPage>> | undefined;
     try {
-      session = await createPage(`http://${controller.ip}`);
-      const { page } = session;
-      await this.login(page, controller.password);
+      const page = await this.getPage(controller.ip, controller.password);
 
       const chains = await this.makeDmCall<DEV2_FW_CHAIN[]>(
         "getList",
@@ -409,7 +412,6 @@ export class Router {
         stack: c.stack,
       }));
     } finally {
-      await session?.cleanup();
       this.release();
     }
   }
@@ -423,11 +425,8 @@ export class Router {
     }
 
     await this.waitRelease();
-    let session: Awaited<ReturnType<typeof createPage>> | undefined;
     try {
-      session = await createPage(`http://${controller.ip}`);
-      const { page } = session;
-      await this.login(page, controller.password);
+      const page = await this.getPage(controller.ip, controller.password);
 
       const rawRules = await this.makeDmCall<DEV2_FW_CHAIN_RULE[]>(
         "getList",
@@ -448,7 +447,6 @@ export class Router {
 
       return rules;
     } finally {
-      await session?.cleanup();
       this.release();
     }
   }
@@ -468,11 +466,8 @@ export class Router {
     }
 
     await this.waitRelease();
-    let session: Awaited<ReturnType<typeof createPage>> | undefined;
     try {
-      session = await createPage(`http://${controller.ip}`);
-      const { page } = session;
-      await this.login(page, controller.password);
+      const page = await this.getPage(controller.ip, controller.password);
 
       const data: Record<string, unknown> = {
         enable: 1,
@@ -495,7 +490,6 @@ export class Router {
 
       return result.stack;
     } finally {
-      await session?.cleanup();
       this.release();
     }
   }
@@ -509,11 +503,8 @@ export class Router {
     }
 
     await this.waitRelease();
-    let session: Awaited<ReturnType<typeof createPage>> | undefined;
     try {
-      session = await createPage(`http://${controller.ip}`);
-      const { page } = session;
-      await this.login(page, controller.password);
+      const page = await this.getPage(controller.ip, controller.password);
       await this.makeDmCall<void>(
         "del",
         "DEV2_FW_CHAIN_RULE",
@@ -521,7 +512,6 @@ export class Router {
         page,
       );
     } finally {
-      await session?.cleanup();
       this.release();
     }
   }
@@ -533,25 +523,19 @@ export class Router {
       const controller = allRouters.find((r) => r.isController);
       const agents = allRouters.filter((r) => !r.isController);
       for (const agent of agents) {
-        let session: Awaited<ReturnType<typeof createPage>> | undefined;
         try {
-          session = await createPage(`http://${agent.ip}`);
-          const { page } = session;
-          await this.login(page, agent.password);
+          const page = await this.getPage(agent.ip, agent.password);
           await this.rebootRouter(page);
-        } finally {
-          await session?.cleanup();
+        } catch (error) {
+          console.error(`Error rebooting agent ${agent.ip}:`, error);
         }
       }
       if (controller) {
-        let session: Awaited<ReturnType<typeof createPage>> | undefined;
         try {
-          session = await createPage(`http://${controller.ip}`);
-          const { page } = session;
-          await this.login(page, controller.password);
+          const page = await this.getPage(controller.ip, controller.password);
           await this.rebootRouter(page);
-        } finally {
-          await session?.cleanup();
+        } catch (error) {
+          console.error(`Error rebooting controller ${controller.ip}:`, error);
         }
       }
     } finally {
@@ -568,11 +552,9 @@ export class Router {
     }
 
     await this.waitRelease();
-    let session: Awaited<ReturnType<typeof createPage>> | undefined;
+    let page: Page | undefined;
     try {
-      session = await createPage(`http://${controller.ip}`);
-      const { page } = session;
-      await this.login(page, controller.password);
+      page = await this.getPage(controller.ip, controller.password);
 
       const [wanInfo, devInfo, memoryStatus, procStatus] = await Promise.all([
         this.makeDmCall<DEV2_ADT_WAN[]>("getList", "DEV2_ADT_WAN", {}, page),
@@ -634,7 +616,6 @@ export class Router {
         totalUpload: formatBytes(totalUpload),
       };
     } finally {
-      await session?.cleanup();
       this.release();
     }
   }

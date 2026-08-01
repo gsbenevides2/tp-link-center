@@ -7,7 +7,7 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - ROUTER_PASSWORD_SECRET=${ROUTER_PASSWORD_SECRET}
-      - BROWSER_URL=http://172.30.0.20:3000
+      - BROWSER_WSENDPOINT=ws://172.30.0.20:3000
     depends_on:
       - chrome
     networks:
