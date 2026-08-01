@@ -116,6 +116,7 @@ bun run dev        # Start dev server at http://localhost:3000
 | `GET` | `/api/devices/:id/history?from=&to=` | Get connection history for a time range |
 | `GET` | `/api/router/connected-devices` | Scrape router for currently connected devices |
 | `GET` | `/api/checks/latest` | Get the latest online check snapshot |
+| `GET` | `/api/router/status`| Get the status of connection and route controller system |
 
 ## License
 

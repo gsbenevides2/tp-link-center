@@ -22,8 +22,8 @@
     "Devices"
   ],
   "scripts": {
-    "dev": "bun --bun next dev",
-    "build": "bun --bun next build",
+    "dev": "bun --bun next dev --webpack",
+    "build": "bun --bun next build --webpack",
     "start": "bun --bun next start",
     "lint": "eslint",
     "db:sync": "bun --bun run drizzle-kit push --config server/db/drizzle.config.ts",

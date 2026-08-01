@@ -9,6 +9,11 @@ import {
   DEV2_PROC_STATUS,
   DEV2_WIFI_APDEV,
   DEV2_WIFI_APDEV_ASSOCDEV,
+  DEV2_WIFI_APDEV_RADIO,
+  DEV2_WIFI_APDEV_ETHASSOCDEV,
+  DEV2_DHCPV4_POOL_STATICADDR,
+  DEV2_FW_CHAIN,
+  DEV2_FW_CHAIN_RULE,
 } from "./types";
 
 const { BROWSER_URL } = process.env;
@@ -34,24 +39,14 @@ async function createPage(endpoint: string) {
   } catch (error) {
     try {
       await page!.close();
-    } catch {
-      // page not created or already closed
-    }
-    browser.disconnect();
+    } catch {}
     throw error;
   }
 
   const cleanup = async () => {
     try {
       await page.close();
-    } catch {
-      // page already closed
-    }
-    try {
-      browser.disconnect();
-    } catch {
-      // browser already disconnected
-    }
+    } catch {}
   };
 
   return { page, cleanup };
@@ -135,9 +130,11 @@ export class Router {
   private static async makeDmCall<T>(
     method: string,
     oid: string,
-    data: Record<string, unknown>,
+    data: Record<string, unknown> = {},
     page: Page,
+    timeoutMs = 30_000,
   ): Promise<T> {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     const str = `(function(){
       return new Promise((resolve, reject)=>{
         $.dm.${method}({
@@ -149,8 +146,20 @@ export class Router {
             error: (err)=>reject(err)
           }
         })
-      `;
-    const response = await this.evaluate<T>(page, str);
+      })
+    })()`;
+    const response = await Promise.race([
+      this.evaluate<T>(page, str),
+      new Promise<"timeout call">((resolve) => {
+        timeout = setTimeout(() => resolve("timeout call"), timeoutMs);
+      }),
+    ]);
+    if (response === "timeout call") {
+      throw new Error(
+        `DM call timed out after ${timeoutMs}ms for: ${page.url()}`,
+      );
+    }
+    clearTimeout(timeout);
     return response;
   }
 
@@ -204,26 +213,9 @@ export class Router {
       DEV2_WIFI_APDEV_ASSOCDEV[]
     >("getList", "DEV2_WIFI_APDEV_ASSOCDEV", {}, page);
 
-    const DEV2_WIFI_APDEV_RADIO = await this.evaluate<
-      Array<{
-        channel: string;
-        operatingFrequencyBand: string;
-        MACAddress: string;
-      }>
-    >(
-      page,
-      `(function routers(){
-        return new Promise(resolve=>{
-            $.dm.getList({
-                oid: "DEV2_WIFI_APDEV_RADIO",
-                data: {},
-                callback: {
-                    success: (data)=>resolve(data)
-                }
-            })
-            })
-        })()`,
-    );
+    const DEV2_WIFI_APDEV_RADIO = await this.makeDmCall<
+      DEV2_WIFI_APDEV_RADIO[]
+    >("getList", "DEV2_WIFI_APDEV_RADIO", {}, page);
     function getRouterInterface(radioMac: string) {
       const data = DEV2_WIFI_APDEV_RADIO.find(
         (item) => item.MACAddress === radioMac,
@@ -249,63 +241,15 @@ export class Router {
   }
 
   private static async rebootRouter(page: Page): Promise<void> {
-    const timeoutMs = 30_000;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-
-    try {
-      await Promise.race([
-        this.evaluate<void>(
-          page,
-          `(function reboot(){
-          return new Promise((resolve, reject)=>{
-            $.dm.op({
-              oid: "ACT_REBOOT",
-              callback: {
-                success: ()=>resolve(),
-                fail: (err)=>reject(err),
-                error: (err)=>reject(err)
-              }
-            })
-          })
-        })()`,
-        ),
-        new Promise<void>((_, reject) => {
-          timeout = setTimeout(
-            () =>
-              reject(new Error(`Router reboot timed out after ${timeoutMs}ms`)),
-            timeoutMs,
-          );
-        }),
-      ]);
-    } finally {
-      if (timeout) clearTimeout(timeout);
-    }
+    await this.makeDmCall<void>("op", "ACT_REBOOT", {}, page);
   }
 
   private static async getConnectedWiredDevices(
     page: Page,
   ): Promise<ConnectedDevices> {
-    const DEV2_WIFI_APDEV_ETHASSOCDEV = await this.evaluate<
-      Array<{
-        IPAddress: string;
-        X_TP_HostName: string;
-        MACAddress: string;
-        active: string;
-      }>
-    >(
-      page,
-      `(function routers(){
-        return new Promise(resolve=>{
-            $.dm.getList({
-                oid: "DEV2_WIFI_APDEV_ETHASSOCDEV",
-                data: {},
-                callback: {
-                    success: (data)=>resolve(data)
-                }
-            })
-            })
-        })()`,
-    );
+    const DEV2_WIFI_APDEV_ETHASSOCDEV = await this.makeDmCall<
+      DEV2_WIFI_APDEV_ETHASSOCDEV[]
+    >("getList", "DEV2_WIFI_APDEV_ETHASSOCDEV", {}, page);
 
     return await Promise.all(
       DEV2_WIFI_APDEV_ETHASSOCDEV.filter((i) => i.active === "1").map(
@@ -337,11 +281,12 @@ export class Router {
       session = await createPage(`http://${controller.ip}`);
       const { page } = session;
       await this.login(page, controller.password);
-
-      const results = await this.getConnectedEasyMeshDevices(page);
-      results.push(...(await this.getConnectedWifiDevices(page)));
-      results.push(...(await this.getConnectedWiredDevices(page)));
-      return results.filter((result) => result.ip !== "");
+      const result = await Promise.all([
+        this.getConnectedEasyMeshDevices(page),
+        this.getConnectedWifiDevices(page),
+        this.getConnectedWiredDevices(page),
+      ]);
+      return result.flat().filter((result) => result.ip !== "");
     } finally {
       await session?.cleanup();
       this.release();
@@ -363,26 +308,9 @@ export class Router {
       const { page } = session;
       await this.login(page, controller.password);
 
-      const DEV2_DHCPV4_POOL_STATICADDR = await this.evaluate<
-        Array<{
-          yiaddr: string;
-          chaddr: string;
-          stack: string;
-        }>
-      >(
-        page,
-        `(function routers(){
-        return new Promise(resolve=>{
-            $.dm.getList({
-                oid: "DEV2_DHCPV4_POOL_STATICADDR",
-                data: {},
-                callback: {
-                    success: (data)=>resolve(data)
-                }
-            })
-            })
-        })()`,
-      );
+      const DEV2_DHCPV4_POOL_STATICADDR = await this.makeDmCall<
+        DEV2_DHCPV4_POOL_STATICADDR[]
+      >("getList", "DEV2_DHCPV4_POOL_STATICADDR", {}, page);
       return DEV2_DHCPV4_POOL_STATICADDR.map((e) => ({
         ip: e.yiaddr,
         mac: e.chaddr,
@@ -409,27 +337,16 @@ export class Router {
       const { page } = session;
       await this.login(page, controller.password);
 
-      const result = await this.evaluate<{ stack: string }>(
+      const result = await this.makeDmCall<{ stack: string }>(
+        "add",
+        "DEV2_DHCPV4_POOL_STATICADDR",
+        {
+          chaddr: mac,
+          yiaddr: ip,
+          enable: "1",
+          pstack: "1,0,0,0,0,0",
+        },
         page,
-        `(function(params){
-          var parsed = JSON.parse(params);
-          return new Promise(function(resolve, reject){
-            $.dm.add({
-              oid: "DEV2_DHCPV4_POOL_STATICADDR",
-              data: {
-                chaddr: parsed.mac,
-                yiaddr: parsed.ip,
-                enable: "1",
-                pstack: "1,0,0,0,0,0"
-              },
-              callback: {
-                success: function(data){ resolve(data) },
-                fail: function(err){ reject(err) },
-                error: function(err){ reject(err) }
-              }
-            })
-          })
-        })(${JSON.stringify(JSON.stringify({ mac, ip }))})`,
       );
 
       return result.stack;
@@ -453,24 +370,11 @@ export class Router {
       session = await createPage(`http://${controller.ip}`);
       const { page } = session;
       await this.login(page, controller.password);
-      await this.evaluate<void>(
+      await this.makeDmCall<void>(
+        "del",
+        "DEV2_DHCPV4_POOL_STATICADDR",
+        { stack: id },
         page,
-        `(function(params){
-          var parsed = JSON.parse(params);
-          return new Promise(function(resolve, reject){
-            $.dm.del({
-              oid: "DEV2_DHCPV4_POOL_STATICADDR",
-              data: {
-                stack: parsed.id
-              },
-              callback: {
-                success: function(){ resolve() },
-                fail: function(err){ reject(err) },
-                error: function(err){ reject(err) }
-              }
-            })
-          })
-        })(${JSON.stringify(JSON.stringify({ id }))})`,
       );
     } finally {
       await session?.cleanup();
@@ -493,28 +397,11 @@ export class Router {
       const { page } = session;
       await this.login(page, controller.password);
 
-      const chains = await this.evaluate<
-        Array<{
-          name: string;
-          enable: string;
-          ruleNumberOfEntries: string;
-          stack: string;
-        }>
-      >(
+      const chains = await this.makeDmCall<DEV2_FW_CHAIN[]>(
+        "getList",
+        "DEV2_FW_CHAIN",
+        {},
         page,
-        `(function routers(){
-        return new Promise((resolve, reject)=>{
-            $.dm.getList({
-                oid: "DEV2_FW_CHAIN",
-                data: {},
-                callback: {
-                    success: (data)=>resolve(data),
-                    fail: (error)=>reject(error),
-                    error: (error)=>reject(error)
-                }
-            })
-            })
-        })()`,
       );
 
       return chains.map((c) => ({
@@ -544,42 +431,22 @@ export class Router {
       const { page } = session;
       await this.login(page, controller.password);
 
-      const rules = await this.evaluate<
-        Array<{
-          ruleName: string;
-          ruleType: string;
-          sourceType: string;
-          sourceIP: string;
-          sourceMAC: string;
-          target: string;
-          enable: string;
-          stack: string;
-        }>
-      >(
+      const rawRules = await this.makeDmCall<DEV2_FW_CHAIN_RULE[]>(
+        "getList",
+        "DEV2_FW_CHAIN_RULE",
+        { pstack: "" },
         page,
-        `(function routers(){
-        return new Promise((resolve, reject)=>{
-            $.dm.getList({
-                oid: "DEV2_FW_CHAIN_RULE",
-                data: { pstack: "" },
-                callback: {
-                    success: (res)=>resolve(res.map((r)=>({
-                        ruleName: r.X_TP_RuleName,
-                        ruleType: r.X_TP_RuleType,
-                        sourceType: r.X_TP_SourceType,
-                        sourceIP: r.sourceIP,
-                        sourceMAC: r.X_TP_SourceMACAddress,
-                        target: r.target,
-                        enable: r.enable,
-                        stack: r.stack
-                    }))),
-                    fail: (error)=>reject(error),
-                    error: (error)=>reject(error)
-                }
-            })
-            })
-        })()`,
       );
+      const rules = rawRules.map((r) => ({
+        ruleName: r.X_TP_RuleName,
+        ruleType: r.X_TP_RuleType,
+        sourceType: r.X_TP_SourceType,
+        sourceIP: r.sourceIP,
+        sourceMAC: r.X_TP_SourceMACAddress,
+        target: r.target,
+        enable: r.enable,
+        stack: r.stack,
+      }));
 
       return rules;
     } finally {
@@ -609,34 +476,23 @@ export class Router {
       const { page } = session;
       await this.login(page, controller.password);
 
-      const result = await this.evaluate<{ stack: string }>(
+      const data: Record<string, unknown> = {
+        enable: 1,
+        X_TP_RuleType: 2,
+        X_TP_RuleName: params.name,
+        X_TP_SourceType: 2,
+        X_TP_SourceMACAddress: params.sourceMAC,
+        pstack: params.chainStack,
+        target: params.target || "Drop",
+      };
+      if (params.sourceIP) {
+        data.sourceIP = params.sourceIP;
+      }
+      const result = await this.makeDmCall<{ stack: string }>(
+        "add",
+        "DEV2_FW_CHAIN_RULE",
+        data,
         page,
-        `(function(params){
-          var p = JSON.parse(params);
-          return new Promise(function(resolve, reject){
-            var data = {
-              enable: 1,
-              X_TP_RuleType: 2,
-              X_TP_RuleName: p.name,
-              X_TP_SourceType: 2,
-              X_TP_SourceMACAddress: p.sourceMAC,
-              pstack: p.chainStack,
-              target: p.target || "Drop"
-            };
-            if (p.sourceIP) {
-              data.sourceIP = p.sourceIP;
-            }
-            $.dm.add({
-              oid: "DEV2_FW_CHAIN_RULE",
-              data: data,
-              callback: {
-                success: function(data){ resolve(data) },
-                fail: function(err){ reject(err) },
-                error: function(err){ reject(err) }
-              }
-            })
-          })
-        })(${JSON.stringify(JSON.stringify(params))})`,
       );
 
       return result.stack;
@@ -660,24 +516,11 @@ export class Router {
       session = await createPage(`http://${controller.ip}`);
       const { page } = session;
       await this.login(page, controller.password);
-      await this.evaluate<void>(
+      await this.makeDmCall<void>(
+        "del",
+        "DEV2_FW_CHAIN_RULE",
+        { stack: ruleStack },
         page,
-        `(function(params){
-          var parsed = JSON.parse(params);
-          return new Promise(function(resolve, reject){
-            $.dm.del({
-              oid: "DEV2_FW_CHAIN_RULE",
-              data: {
-                stack: parsed.ruleStack
-              },
-              callback: {
-                success: function(){ resolve() },
-                fail: function(err){ reject(err) },
-                error: function(err){ reject(err) }
-              }
-            })
-          })
-        })(${JSON.stringify(JSON.stringify({ ruleStack }))})`,
       );
     } finally {
       await session?.cleanup();
@@ -733,87 +576,26 @@ export class Router {
       const { page } = session;
       await this.login(page, controller.password);
 
-      // Fetch WAN connection info
-      const wanInfo = await this.evaluate<DEV2_ADT_WAN[]>(
-        page,
-        `(function(){
-          return new Promise(resolve=>{
-            $.dm.getList({
-              oid: "DEV2_ADT_WAN",
-              data: {},
-              callback: {
-                success: (data)=>resolve(data),
-                fail: ()=>resolve(null),
-                error: ()=>resolve(null)
-              }
-            })
-          })
-        })()`,
-      );
+      const [wanInfo, devInfo, memoryStatus, procStatus] = await Promise.all([
+        this.makeDmCall<DEV2_ADT_WAN[]>("getList", "DEV2_ADT_WAN", {}, page),
+        this.makeDmCall<DEV2_DEV_INFO>("get", "DEV2_DEV_INFO", {}, page),
+        this.makeDmCall<DEV2_MEM_STATUS>("get", "DEV2_MEM_STATUS", {}, page),
+        this.makeDmCall<DEV2_PROC_STATUS>("get", "DEV2_PROC_STATUS", {}, page),
+      ]);
 
       const wanIp = wanInfo.at(0)?.connIPv4Address ?? "";
       const connectionStatus = wanInfo.at(0)?.connStatusV4;
       const connectionUptime = Number(wanInfo.at(0)?.X_TP_Uptime);
       const totalDownload = Number(wanInfo.at(0)?.X_TP_BytesReceived);
-      const totalUpload = Number(wanInfo.at(0)?.X_TP_BytesReceived);
-
-      // Fetch device info (uptime, firmware, hardware)
-      const devInfo = await this.evaluate<DEV2_DEV_INFO>(
-        page,
-        `(function(){
-          return new Promise(resolve=>{
-            $.dm.get({
-              oid: "DEV2_DEV_INFO",
-              data: {},
-              callback: {
-                success: (data)=>resolve(data),
-                fail: ()=>resolve(null),
-                error: ()=>resolve(null)
-              }
-            })
-          })
-        })()`,
-      );
+      const totalUpload = Number(wanInfo.at(0)?.X_TP_BytesSent);
 
       const routerUptime = Number(devInfo.upTime);
-
-      const memoryStatus = await this.evaluate<DEV2_MEM_STATUS>(
-        page,
-        `(function(){
-          return new Promise(resolve=>{
-            $.dm.get({
-              oid: "DEV2_MEM_STATUS",
-              data: {},
-              callback: {
-                success: (data)=>resolve(data),
-                fail: ()=>resolve(null),
-                error: ()=>resolve(null)
-              }
-            })
-          })
-        })()`,
-      );
 
       const freeMemory = Number(memoryStatus.free);
       const totalMemory = Number(memoryStatus.total);
       const usedMemory = totalMemory - freeMemory;
-      const memoryUsage = (usedMemory / totalMemory) * 100;
-
-      const procStatus = await this.evaluate<DEV2_PROC_STATUS>(
-        page,
-        `(function(){
-          return new Promise(resolve=>{
-            $.dm.get({
-              oid: "DEV2_PROC_STATUS",
-              data: {},
-              callback: {
-                success: (data)=>resolve(data),
-                fail: ()=>resolve(null),
-                error: ()=>resolve(null)
-              }
-            })
-          })
-        })()`,
+      const memoryUsage = parseInt(
+        ((usedMemory / totalMemory) * 100).toString(),
       );
 
       const cpuUsage = Number(procStatus.CPUUsage);

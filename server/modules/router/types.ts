@@ -156,11 +156,6 @@ export interface DEV2_MEM_STATUS {
   stack: string;
 }
 
-export interface DEV2_DEV_INFO {
-  upTime: string;
-  stack: string;
-}
-
 export interface DEV2_PROC_STATUS {
   CPUUsage: string;
   stack: string;
@@ -180,4 +175,41 @@ export interface DEV2_WIFI_APDEV_ASSOCDEV {
   X_TP_IPAddress: string;
   MACAddress: string;
   active: string;
+}
+
+export interface DEV2_WIFI_APDEV_RADIO {
+  channel: string;
+  operatingFrequencyBand: string;
+  MACAddress: string;
+}
+
+export interface DEV2_WIFI_APDEV_ETHASSOCDEV {
+  IPAddress: string;
+  X_TP_HostName: string;
+  MACAddress: string;
+  active: string;
+}
+
+export interface DEV2_DHCPV4_POOL_STATICADDR {
+  yiaddr: string;
+  chaddr: string;
+  stack: string;
+}
+
+export interface DEV2_FW_CHAIN {
+  name: string;
+  enable: string;
+  ruleNumberOfEntries: string;
+  stack: string;
+}
+
+export interface DEV2_FW_CHAIN_RULE {
+  X_TP_RuleName: string;
+  X_TP_RuleType: string;
+  X_TP_SourceType: string;
+  sourceIP: string;
+  X_TP_SourceMACAddress: string;
+  target: string;
+  enable: string;
+  stack: string;
 }
