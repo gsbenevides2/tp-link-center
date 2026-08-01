@@ -93,7 +93,7 @@ export class Router {
   }
 
   private static async isLoggedIn(page: Page): Promise<boolean> {
-    const isLoggedOut = await this.evaluate<boolean>(
+    const isLoggedOut = await this.safeEvaluate<boolean>(
       page,
       `$("#pc-login-password").is(":visible")`,
     );
@@ -102,7 +102,7 @@ export class Router {
 
   private static async login(page: Page, password: string) {
     await wait(200);
-    const isLoggedOut = await this.evaluate<boolean>(
+    const isLoggedOut = await this.safeEvaluate<boolean>(
       page,
       `$("#pc-login-password").is(":visible")`,
     );
@@ -114,24 +114,24 @@ export class Router {
       if (input) input.value = pwd;
     }, password);
     await wait(100);
-    await this.evaluate(page, `$("#pc-login-btn").click()`);
+    await this.safeEvaluate(page, `$("#pc-login-btn").click()`);
 
     const deadline = Date.now() + LOGIN_TIMEOUT_MS;
     while (Date.now() < deadline) {
       await wait(100);
-      const isInvalid = await this.evaluate<boolean>(
+      const isInvalid = await this.safeEvaluate<boolean>(
         page,
         `$(".content.error-tips-content").is(":visible")`,
       ).catch(() => false);
       if (isInvalid) throw new Error("Password is Invalid for: " + page.url());
-      const isForcing = await this.evaluate<boolean>(
+      const isForcing = await this.safeEvaluate<boolean>(
         page,
         `$("#confirm-yes").is(":visible")`,
       ).catch(() => false);
       if (isForcing) {
-        await this.evaluate(page, `$("#confirm-yes").click()`);
+        await this.safeEvaluate(page, `$("#confirm-yes").click()`);
       }
-      const isLogged = await this.evaluate<boolean>(
+      const isLogged = await this.safeEvaluate<boolean>(
         page,
         `$("#topReboot").is(":visible")`,
       ).catch(() => false);
@@ -147,6 +147,34 @@ export class Router {
     return page.evaluate(script) as any as Promise<T>;
   }
 
+  private static async safeEvaluate<T>(
+    page: Page,
+    script: string,
+    timeoutMs = 30_000,
+  ): Promise<T> {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const response = await Promise.race([
+        this.evaluate<T>(page, script),
+        new Promise<"timeout call">((resolve) => {
+          timeout = setTimeout(() => resolve("timeout call"), timeoutMs);
+        }),
+      ]);
+      if (response === "timeout call") {
+        throw new Error(
+          `Evaluate timed out after ${timeoutMs}ms for: ${page.url()}`,
+        );
+      }
+      return response;
+    } catch (error) {
+      throw error;
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      this.browser = null;
+      this.pageList.clear();
+    }
+  }
+
   private static async makeDmCall<T>(
     method: string,
     oid: string,
@@ -154,7 +182,6 @@ export class Router {
     page: Page,
     timeoutMs = 30_000,
   ): Promise<T> {
-    let timeout: ReturnType<typeof setTimeout> | undefined;
     const str = `(function(){
       return new Promise((resolve, reject)=>{
         $.dm.${method}({
@@ -168,18 +195,7 @@ export class Router {
         })
       })
     })()`;
-    const response = await Promise.race([
-      this.evaluate<T>(page, str),
-      new Promise<"timeout call">((resolve) => {
-        timeout = setTimeout(() => resolve("timeout call"), timeoutMs);
-      }),
-    ]);
-    if (response === "timeout call") {
-      throw new Error(
-        `DM call timed out after ${timeoutMs}ms for: ${page.url()}`,
-      );
-    }
-    clearTimeout(timeout);
+    const response = await this.safeEvaluate<T>(page, str, timeoutMs);
     return response;
   }
 
