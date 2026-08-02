@@ -3,15 +3,12 @@
 import { Logo } from "@/app/icons/logo";
 import {
   useSyncRouter,
-  useTriggerOnlineCheck,
   useRestartNetwork,
 } from "../RegisteredDevicesSection/useDevices";
-import { VscSync, VscCheck, VscDebugRestart } from "react-icons/vsc";
+import { VscSync, VscDebugRestart } from "react-icons/vsc";
 
 export function Header() {
   const { mutate: syncRouter, isPending } = useSyncRouter();
-  const { mutate: triggerCheck, isPending: isTriggering } =
-    useTriggerOnlineCheck();
   const { mutate: restartNetwork, isPending: isRestarting } =
     useRestartNetwork();
 
@@ -24,18 +21,6 @@ export function Header() {
         </h1>
       </div>
       <div className="flex gap-2">
-        <button
-          className="text-white btn btn-sm btn-ghost"
-          onClick={() => triggerCheck()}
-          disabled={isTriggering}
-        >
-          {isTriggering ? (
-            <span className="loading loading-spinner loading-sm"></span>
-          ) : (
-            <VscCheck />
-          )}
-          Verificar Dispositivos
-        </button>
         <button
           className="text-white btn btn-sm btn-ghost"
           onClick={() => syncRouter()}

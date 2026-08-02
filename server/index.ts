@@ -3,7 +3,6 @@ import { openapi } from "@/server/openapi";
 import { device } from "@/server/modules/devices";
 import { router } from "@/server/modules/router";
 import { checks } from "@/server/modules/checks";
-import { sync } from "@/server/modules/sync";
 import { settingsModule } from "@/server/modules/settings";
 
 export const app = new Elysia({ prefix: "/api" })
@@ -11,5 +10,4 @@ export const app = new Elysia({ prefix: "/api" })
   .use(device)
   .use(router)
   .use(checks)
-  .use(sync)
   .use(settingsModule);

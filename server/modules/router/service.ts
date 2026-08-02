@@ -1,5 +1,4 @@
 import puppeteer, { type Page, type Browser } from "puppeteer-core";
-import { RouterModel } from "./model";
 import getVendor from "mac-oui-lookup";
 import { Device } from "../devices/service";
 import {
@@ -14,14 +13,18 @@ import {
   DEV2_DHCPV4_POOL_STATICADDR,
   DEV2_FW_CHAIN,
   DEV2_FW_CHAIN_RULE,
+  ConnectedDevices,
+  DhcpEntries,
+  RouterStatus,
 } from "./types";
 import { Queue } from "@/server/utils/queue";
+import { db } from "@/server/db";
+import { normalizeMac } from "@/server/utils/normalizeMac";
+import { onlineChecks, onlineDevicesChecks } from "@/server/db/schema";
+import { Settings } from "../settings/service";
 
 const { BROWSER_URL, BROWSER_WSENDPOINT } = process.env;
 
-type ConnectedDevices = RouterModel["getConnectedDevicesResponse"];
-type DhcpEntries = RouterModel["listDHCPEntryResponse"];
-type RouterStatus = RouterModel["getRouterStatusResponse"];
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const LOGIN_TIMEOUT_MS = 30_000;
@@ -286,15 +289,19 @@ export class Router {
     );
   }
 
-  static async getConnectedDevices(): Promise<ConnectedDevices> {
-    const controller = await Device.getControllerRouter();
-    if (!controller) {
-      throw new Error(
-        "No controller router registered. Please register a router controller first.",
-      );
-    }
+  private static async getConnectedDevices(
+    page?: Page,
+  ): Promise<ConnectedDevices> {
+    if (!page) {
+      const controller = await Device.getControllerRouter();
+      if (!controller) {
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
+      }
 
-    const page = await this.getPage(controller.ip, controller.password);
+      page = await this.getPage(controller.ip, controller.password);
+    }
     const result = await Promise.all([
       this.getConnectedEasyMeshDevices(page),
       this.getConnectedWifiDevices(page),
@@ -303,16 +310,17 @@ export class Router {
     return result.flat().filter((result) => result.ip !== "");
   }
 
-  static async listDHCPEntry(): Promise<DhcpEntries> {
-    const controller = await Device.getControllerRouter();
-    if (!controller) {
-      throw new Error(
-        "No controller router registered. Please register a router controller first.",
-      );
+  private static async listDHCPEntry(page?: Page): Promise<DhcpEntries> {
+    if (!page) {
+      const controller = await Device.getControllerRouter();
+      if (!controller) {
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
+      }
+
+      page = await this.getPage(controller.ip, controller.password);
     }
-
-    const page = await this.getPage(controller.ip, controller.password);
-
     const DEV2_DHCPV4_POOL_STATICADDR = await this.makeDmCall<
       DEV2_DHCPV4_POOL_STATICADDR[]
     >("getList", "DEV2_DHCPV4_POOL_STATICADDR", {}, page);
@@ -323,16 +331,21 @@ export class Router {
     }));
   }
 
-  static async addDHCPEntry(mac: string, ip: string): Promise<string> {
-    const controller = await Device.getControllerRouter();
-    if (!controller) {
-      throw new Error(
-        "No controller router registered. Please register a router controller first.",
-      );
+  private static async addDHCPEntry(
+    mac: string,
+    ip: string,
+    page?: Page,
+  ): Promise<string> {
+    if (!page) {
+      const controller = await Device.getControllerRouter();
+      if (!controller) {
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
+      }
+
+      page = await this.getPage(controller.ip, controller.password);
     }
-
-    const page = await this.getPage(controller.ip, controller.password);
-
     const result = await this.makeDmCall<{ stack: string }>(
       "add",
       "DEV2_DHCPV4_POOL_STATICADDR",
@@ -348,15 +361,17 @@ export class Router {
     return result.stack;
   }
 
-  static async removeDHCPEntry(id: string) {
-    const controller = await Device.getControllerRouter();
-    if (!controller) {
-      throw new Error(
-        "No controller router registered. Please register a router controller first.",
-      );
-    }
+  private static async removeDHCPEntry(id: string, page?: Page) {
+    if (!page) {
+      const controller = await Device.getControllerRouter();
+      if (!controller) {
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
+      }
 
-    const page = await this.getPage(controller.ip, controller.password);
+      page = await this.getPage(controller.ip, controller.password);
+    }
     await this.makeDmCall<void>(
       "del",
       "DEV2_DHCPV4_POOL_STATICADDR",
@@ -365,16 +380,16 @@ export class Router {
     );
   }
 
-  static async listFirewallChains() {
-    const controller = await Device.getControllerRouter();
-    if (!controller) {
-      throw new Error(
-        "No controller router registered. Please register a router controller first.",
-      );
+  private static async listFirewallChains(page?: Page) {
+    if (!page) {
+      const controller = await Device.getControllerRouter();
+      if (!controller) {
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
+      }
+      page = await this.getPage(controller.ip, controller.password);
     }
-
-    const page = await this.getPage(controller.ip, controller.password);
-
     const chains = await this.makeDmCall<DEV2_FW_CHAIN[]>(
       "getList",
       "DEV2_FW_CHAIN",
@@ -390,16 +405,16 @@ export class Router {
     }));
   }
 
-  static async listFirewallRules() {
-    const controller = await Device.getControllerRouter();
-    if (!controller) {
-      throw new Error(
-        "No controller router registered. Please register a router controller first.",
-      );
+  private static async listFirewallRules(page?: Page) {
+    if (!page) {
+      const controller = await Device.getControllerRouter();
+      if (!controller) {
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
+      }
+      page = await this.getPage(controller.ip, controller.password);
     }
-
-    const page = await this.getPage(controller.ip, controller.password);
-
     const rawRules = await this.makeDmCall<DEV2_FW_CHAIN_RULE[]>(
       "getList",
       "DEV2_FW_CHAIN_RULE",
@@ -420,22 +435,26 @@ export class Router {
     return rules;
   }
 
-  static async addFirewallRule(params: {
-    chainStack: string;
-    name: string;
-    sourceMAC: string;
-    sourceIP?: string;
-    target?: string;
-  }) {
-    const controller = await Device.getControllerRouter();
-    if (!controller) {
-      throw new Error(
-        "No controller router registered. Please register a router controller first.",
-      );
+  private static async addFirewallRule(
+    params: {
+      chainStack: string;
+      name: string;
+      sourceMAC: string;
+      sourceIP?: string;
+      target?: string;
+    },
+    page?: Page,
+  ): Promise<string> {
+    if (!page) {
+      const controller = await Device.getControllerRouter();
+      if (!controller) {
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
+      }
+
+      page = await this.getPage(controller.ip, controller.password);
     }
-
-    const page = await this.getPage(controller.ip, controller.password);
-
     const data: Record<string, unknown> = {
       enable: 1,
       X_TP_RuleType: 2,
@@ -458,15 +477,17 @@ export class Router {
     return result.stack;
   }
 
-  static async removeFirewallRule(ruleStack: string) {
-    const controller = await Device.getControllerRouter();
-    if (!controller) {
-      throw new Error(
-        "No controller router registered. Please register a router controller first.",
-      );
-    }
+  private static async removeFirewallRule(ruleStack: string, page?: Page) {
+    if (!page) {
+      const controller = await Device.getControllerRouter();
+      if (!controller) {
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
+      }
 
-    const page = await this.getPage(controller.ip, controller.password);
+      page = await this.getPage(controller.ip, controller.password);
+    }
     await this.makeDmCall<void>(
       "del",
       "DEV2_FW_CHAIN_RULE",
@@ -497,16 +518,17 @@ export class Router {
     }
   }
 
-  static async getStatus(): Promise<RouterStatus> {
-    const controller = await Device.getControllerRouter();
-    if (!controller) {
-      throw new Error(
-        "No controller router registered. Please register a router controller first.",
-      );
+  private static async getStatus(page?: Page): Promise<RouterStatus> {
+    if (!page) {
+      const controller = await Device.getControllerRouter();
+      if (!controller) {
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
+      }
+
+      page = await this.getPage(controller.ip, controller.password);
     }
-
-    const page = await this.getPage(controller.ip, controller.password);
-
     const [wanInfo, devInfo, memoryStatus, procStatus] = await Promise.all([
       this.makeDmCall<DEV2_ADT_WAN[]>("getList", "DEV2_ADT_WAN", {}, page),
       this.makeDmCall<DEV2_DEV_INFO>("get", "DEV2_DEV_INFO", {}, page),
@@ -564,5 +586,174 @@ export class Router {
       totalDownload: formatBytes(totalDownload),
       totalUpload: formatBytes(totalUpload),
     };
+  }
+
+  // Data Sync Between Database and Router
+
+  private static async syncDhcp(page: Page): Promise<void> {
+    const dbInterfaces = await db.query.interfaces.findMany({
+      where: {
+        reservedIp: true,
+      },
+      with: {
+        device: true,
+      },
+    });
+
+    const interfacesToSync = dbInterfaces.filter(
+      (i) =>
+        i.device?.type === "client" ||
+        (i.device?.type === "router" && !i.device.isController),
+    );
+
+    const routerEntries = await this.listDHCPEntry(page);
+
+    const dbMacs = new Set(interfacesToSync.map((i) => normalizeMac(i.mac)));
+    const routerMacToEntry = new Map(
+      routerEntries.map((e) => [normalizeMac(e.mac), e]),
+    );
+
+    for (const entry of routerEntries) {
+      const normalizedMac = normalizeMac(entry.mac);
+      if (!dbMacs.has(normalizedMac)) {
+        await Router.removeDHCPEntry(entry.entryId, page).catch((e) => {
+          console.error(
+            `Failed to remove DHCP entry for ${entry.mac}: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          );
+        });
+      }
+    }
+
+    for (const iface of interfacesToSync) {
+      const normalizedMac = normalizeMac(iface.mac);
+      if (!routerMacToEntry.has(normalizedMac)) {
+        await Router.addDHCPEntry(iface.mac, iface.ip, page).catch((e) => {
+          console.error(
+            `Failed to add DHCP entry for ${iface.mac}: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          );
+        });
+      }
+    }
+  }
+
+  private static async syncFirewall(page: Page): Promise<void> {
+    const dbInterfaces = await db.query.interfaces.findMany({
+      where: {
+        allowList: true,
+      },
+      with: {
+        device: true,
+      },
+    });
+
+    const clientInterfaces = dbInterfaces.filter(
+      (i) => i.device?.type === "client",
+    );
+
+    const chains = await this.listFirewallChains(page);
+    const accessChain = chains.find((c) => c.name === "ACCESSCTL_WHITE");
+
+    if (!accessChain) {
+      return;
+    }
+
+    const allRouterRules = await this.listFirewallRules(page);
+    const routerRules = allRouterRules.filter(
+      (r) => r.stack[0] === accessChain.stack[0],
+    );
+
+    const dbMacs = new Set(clientInterfaces.map((i) => normalizeMac(i.mac)));
+    const routerMacToRule = new Map(
+      routerRules.map((r) => [normalizeMac(r.sourceMAC), r]),
+    );
+
+    for (const rule of routerRules) {
+      const normalizedMac = normalizeMac(rule.sourceMAC);
+      if (!dbMacs.has(normalizedMac)) {
+        await this.removeFirewallRule(rule.stack, page).catch((e) => {
+          console.error(
+            `Failed to remove firewall rule for ${rule.sourceMAC}: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          );
+        });
+      }
+    }
+
+    for (const iface of clientInterfaces) {
+      const normalizedMac = normalizeMac(iface.mac);
+      if (!routerMacToRule.has(normalizedMac)) {
+        await Router.addFirewallRule(
+          {
+            chainStack: accessChain.stack,
+            name: iface.name,
+            sourceMAC: iface.mac,
+            target: "Accept",
+          },
+          page,
+        ).catch((e) => {
+          console.error(
+            `Failed to add firewall rule for ${iface.mac}: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          );
+        });
+      }
+    }
+  }
+
+  private static async syncConnectedDevices(page: Page): Promise<void> {
+    const devices = await this.getConnectedDevices(page);
+    const checkId = crypto.randomUUID();
+
+    await db.insert(onlineChecks).values({
+      id: checkId,
+      createdAt: new Date(),
+    });
+
+    if (devices.length > 0) {
+      await db.insert(onlineDevicesChecks).values(
+        devices.map((d) => ({
+          mac: d.mac,
+          ip: d.ip,
+          checkId,
+          name: d.name,
+          vendor: d.vendor,
+          routerInterface: d.routerInterface,
+        })),
+      );
+    }
+  }
+
+  private static async syncRouterStatus(page: Page): Promise<void> {
+    const status = await this.getStatus(page);
+    await Settings.saveStatus(status);
+  }
+
+  static async syncSettings(): Promise<void> {
+    try {
+      const controller = await Device.getControllerRouter();
+      if (!controller) {
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
+      }
+
+      const page = await this.getPage(controller.ip, controller.password);
+      await this.syncDhcp(page);
+      await this.syncFirewall(page);
+      await this.syncConnectedDevices(page);
+      await this.syncRouterStatus(page);
+    } catch (error) {
+      console.error("Error syncing router settings:", error);
+      throw new Error(
+        "Error syncing router settings: " +
+          (error instanceof Error ? error.message : String(error)),
+      );
+    }
   }
 }

@@ -213,3 +213,30 @@ export interface DEV2_FW_CHAIN_RULE {
   enable: string;
   stack: string;
 }
+
+export type ConnectedDevices = {
+  mac: string;
+  ip: string;
+  vendor: string;
+  name: string;
+  routerInterface: string;
+}[];
+
+export type DhcpEntries = {
+  entryId: string;
+  mac: string;
+  ip: string;
+}[];
+
+export type RouterStatus = {
+  wanIp: string;
+  connectionStatus: string;
+  connectionUptime: string;
+  routerUptime: string;
+  firmwareVersion: string;
+  hardwareVersion: string;
+  cpuUsage: number | null;
+  memoryUsage: number | null;
+  totalDownload: string | null;
+  totalUpload: string | null;
+};

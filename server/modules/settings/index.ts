@@ -7,37 +7,19 @@ export const settingsModule = new Elysia({
   detail: {
     tags: ["Settings"],
   },
-})
-  .get(
-    "/",
-    async () => {
-      return status(StatusMap.OK, await Settings.getAll());
+}).get(
+  "/latest-router-status",
+  async () => {
+    return status(StatusMap.OK, await Settings.getStatus());
+  },
+  {
+    detail: {
+      summary: "Get Router Status",
+      description:
+        "Get current router status including WAN IP, uptime, and performance metrics.",
     },
-    {
-      detail: {
-        summary: "List Settings",
-        description: "List all settings.",
-      },
-      response: {
-        [StatusMap.OK]: SettingsModel.getResponseArray,
-      },
+    response: {
+      [StatusMap.OK]: SettingsModel.getLatestRouterStatusResponse,
     },
-  )
-  .put(
-    "/:key",
-    async ({ params, body }) => {
-      const result = await Settings.set(params.key, body.value);
-      return status(StatusMap.OK, result);
-    },
-    {
-      detail: {
-        summary: "Update Setting",
-        description: "Update a setting by key.",
-      },
-      params: SettingsModel.getKeyParams,
-      body: SettingsModel.updateBody,
-      response: {
-        [StatusMap.OK]: SettingsModel.getResponse,
-      },
-    },
-  );
+  },
+);

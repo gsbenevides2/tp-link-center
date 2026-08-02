@@ -1,60 +1,63 @@
-import { settings } from "@/server/db/schema";
-import { createSelectSchema } from "drizzle-orm/zod";
 import { type UnwrapSchema } from "elysia";
 import z from "zod";
 
 export const SettingsModel = {
-  getKeyParams: z.object({
-    key: z.enum(["cron_enabled"]).meta({
-      title: "Setting Key",
-      description: "Key of the setting to update.",
-      example: "cron_enabled",
-    }),
-  }),
-  updateBody: z.object({
-    value: z.string().meta({
-      title: "Setting Value",
-      description: "Value to set for the setting.",
-      example: "true",
-    }),
-  }),
-  getResponse: createSelectSchema(settings, {
-    key: (schema) =>
-      schema.meta({
-        title: "Setting Key",
-        description: "Key of the setting.",
-        example: "cron_enabled",
+  getLatestRouterStatusResponse: z
+    .object({
+      wanIp: z.string().meta({
+        title: "WAN IP Address",
+        description: "Public IP address of the internet connection.",
+        example: "200.100.50.25",
       }),
-    value: (schema) =>
-      schema.meta({
-        title: "Setting Value",
-        description: "Value of the setting.",
-        example: "true",
+      connectionStatus: z.string().meta({
+        title: "Connection Status",
+        description: "Status of the WAN connection.",
+        example: "Connected",
       }),
-  }).meta({
-    title: "Setting",
-    description: "A configuration setting.",
-  }),
-  getResponseArray: z
-    .array(
-      createSelectSchema(settings, {
-        key: (schema) =>
-          schema.meta({
-            title: "Setting Key",
-            description: "Key of the setting.",
-            example: "cron_enabled",
-          }),
-        value: (schema) =>
-          schema.meta({
-            title: "Setting Value",
-            description: "Value of the setting.",
-            example: "true",
-          }),
+      connectionUptime: z.string().meta({
+        title: "Connection Uptime",
+        description: "How long the WAN connection has been active.",
+        example: "3d 5h 30m",
       }),
-    )
+      routerUptime: z.string().meta({
+        title: "Router Uptime",
+        description: "How long the router has been powered on.",
+        example: "7d 12h 45m",
+      }),
+      firmwareVersion: z.string().meta({
+        title: "Firmware Version",
+        description: "Current firmware version of the router.",
+        example: "1.6.1",
+      }),
+      hardwareVersion: z.string().meta({
+        title: "Hardware Version",
+        description: "Hardware version of the router.",
+        example: "Deco M5 v2.0",
+      }),
+      cpuUsage: z.number().nullable().meta({
+        title: "CPU Usage (%)",
+        description: "Current CPU usage percentage.",
+        example: 35,
+      }),
+      memoryUsage: z.number().nullable().meta({
+        title: "Memory Usage (%)",
+        description: "Current memory usage percentage.",
+        example: 62,
+      }),
+      totalDownload: z.string().nullable().meta({
+        title: "Total Download",
+        description: "Total data downloaded.",
+        example: "256.5 GB",
+      }),
+      totalUpload: z.string().nullable().meta({
+        title: "Total Upload",
+        description: "Total data uploaded.",
+        example: "45.2 GB",
+      }),
+    })
     .meta({
-      title: "Settings List",
-      description: "List of all configuration settings.",
+      title: "Router Status",
+      description: "Current status and performance information of the router.",
     }),
 } as const;
 

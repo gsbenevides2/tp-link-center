@@ -11,6 +11,7 @@ export type DeviceType = Device["type"];
 
 export const DEVICES_KEY = "devices" as const;
 export const CHECKS_KEY = "checks" as const;
+export const ROUTER_STATUS_KEY = "router-status" as const;
 
 const DEFAULT_QUERY_SETTINGS = {
   retry: false,
@@ -186,29 +187,14 @@ export function useSyncRouter() {
   return useMutation({
     ...DEFAULT_QUERY_SETTINGS,
     mutationFn: async () => {
-      const response = await clientSideApi.sync.post();
-      if (response.error) throw response.error;
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [DEVICES_KEY] });
-    },
-  });
-}
-
-export function useTriggerOnlineCheck() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    ...DEFAULT_QUERY_SETTINGS,
-    mutationFn: async () => {
-      const response = await clientSideApi.checks.trigger.post();
+      const response = await clientSideApi.router.sync.post();
       if (response.error) throw response.error;
       return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [CHECKS_KEY, "latest"] });
       queryClient.invalidateQueries({ queryKey: [DEVICES_KEY] });
+      queryClient.invalidateQueries({ queryKey: [ROUTER_STATUS_KEY] });
     },
   });
 }
@@ -232,9 +218,10 @@ export function useRestartNetwork() {
 export function useRouterStatusQuery() {
   return useQuery({
     ...DEFAULT_QUERY_SETTINGS,
-    queryKey: ["router-status"],
+    queryKey: [ROUTER_STATUS_KEY],
     queryFn: async () => {
-      const response = await clientSideApi.router.status.get();
+      const response =
+        await clientSideApi.settings["latest-router-status"].get();
       if (response.error) throw response.error;
       return response.data;
     },
