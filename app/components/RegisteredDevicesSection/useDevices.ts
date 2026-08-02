@@ -12,8 +12,16 @@ export type DeviceType = Device["type"];
 export const DEVICES_KEY = "devices" as const;
 export const CHECKS_KEY = "checks" as const;
 
+const DEFAULT_QUERY_SETTINGS = {
+  retry: false,
+  refetchOnWindowFocus: false,
+  refetchOnMount: false,
+  refetchOnReconnect: false,
+};
+
 export function useDevicesQuery() {
   return useQuery({
+    ...DEFAULT_QUERY_SETTINGS,
     queryKey: [DEVICES_KEY],
     queryFn: async (): Promise<GetDeviceFuncReturn> => {
       const response = await clientSideApi.devices.get();
@@ -30,6 +38,7 @@ export type GetCheckFuncReturn = NonNullable<
 
 export function useLatestCheckQuery() {
   return useQuery({
+    ...DEFAULT_QUERY_SETTINGS,
     queryKey: [CHECKS_KEY, "latest"],
     queryFn: async (): Promise<GetCheckFuncReturn> => {
       const response = await clientSideApi.checks.latest.get();
@@ -43,6 +52,7 @@ export function useRemoveDevice() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    ...DEFAULT_QUERY_SETTINGS,
     mutationFn: async (deviceId: string) => {
       await clientSideApi.devices({ id: deviceId }).delete();
     },
@@ -58,6 +68,7 @@ export function useAddDevice() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    ...DEFAULT_QUERY_SETTINGS,
     mutationFn: async (params: AddDeviceParams) => {
       const response = await clientSideApi.devices.post(params);
       if (response.error) throw response.error;
@@ -77,6 +88,7 @@ export function useUpdateDevice() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    ...DEFAULT_QUERY_SETTINGS,
     mutationFn: async ({
       deviceId,
       body,
@@ -100,6 +112,7 @@ export function useAddInterface() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    ...DEFAULT_QUERY_SETTINGS,
     mutationFn: async ({
       deviceId,
       body,
@@ -123,6 +136,7 @@ export function useUpdateInterface() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    ...DEFAULT_QUERY_SETTINGS,
     mutationFn: async ({
       deviceId,
       interfaceId,
@@ -147,6 +161,7 @@ export function useDeleteInterface() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    ...DEFAULT_QUERY_SETTINGS,
     mutationFn: async ({
       deviceId,
       interfaceId,
@@ -169,6 +184,7 @@ export function useSyncRouter() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    ...DEFAULT_QUERY_SETTINGS,
     mutationFn: async () => {
       const response = await clientSideApi.sync.post();
       if (response.error) throw response.error;
@@ -184,6 +200,7 @@ export function useTriggerOnlineCheck() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    ...DEFAULT_QUERY_SETTINGS,
     mutationFn: async () => {
       const response = await clientSideApi.checks.trigger.post();
       if (response.error) throw response.error;
@@ -200,6 +217,7 @@ export function useRestartNetwork() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    ...DEFAULT_QUERY_SETTINGS,
     mutationFn: async () => {
       const response = await clientSideApi.router["restart-network"].post();
       if (response.error) throw response.error;
@@ -213,12 +231,12 @@ export function useRestartNetwork() {
 
 export function useRouterStatusQuery() {
   return useQuery({
+    ...DEFAULT_QUERY_SETTINGS,
     queryKey: ["router-status"],
     queryFn: async () => {
       const response = await clientSideApi.router.status.get();
       if (response.error) throw response.error;
       return response.data;
     },
-    refetchInterval: 30_000,
   });
 }
