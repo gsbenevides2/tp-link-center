@@ -104,19 +104,42 @@ bun run dev        # Start dev server at http://localhost:3000
 
 ## API Reference
 
+### Device Management
+
+| Method | Endpoint | Description | Parameters |
+|--------|----------|-------------|------------|
+| `GET` | `/api/devices/` | List all devices with interfaces | - |
+| `POST` | `/api/devices/` | Create a device | Body: `{ name: string }` |
+| `PUT` | `/api/devices/:id` | Update device name/brand | Body: `{ name?: string, brand?: string }` |
+| `DELETE` | `/api/devices/:id` | Delete a device and its interfaces | Path: `id` |
+
+### Network Interfaces
+
+| Method | Endpoint | Description | Parameters |
+|--------|----------|-------------|------------|
+| `POST` | `/api/devices/:id/interface` | Add a network interface to a device | Path: `id` • Body: `{ name: string, mac?: string }` |
+| `PUT` | `/api/devices/:id/interface/:interfaceId` | Update a network interface | Path: `id, interfaceId` • Body: `{ name?: string, mac?: string }` |
+| `DELETE` | `/api/devices/:id/interface/:interfaceId` | Delete a network interface | Path: `id, interfaceId` |
+
+### Connection History
+
+| Method | Endpoint | Description | Parameters |
+|--------|----------|-------------|------------|
+| `GET` | `/api/devices/:id/history` | Get device connection history | Path: `id` • Query: `startDate?, endDate?, limit?` |
+
+### Router Control
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/devices/` | List all devices with interfaces |
-| `POST` | `/api/devices/` | Create a device |
-| `PUT` | `/api/devices/:id` | Update a device |
-| `DELETE` | `/api/devices/:id` | Delete a device and its interfaces |
-| `POST` | `/api/devices/:id/interface` | Add a network interface to a device |
-| `PUT` | `/api/devices/:id/interface/:interfaceId` | Update a network interface |
-| `DELETE` | `/api/devices/:id/interface/:interfaceId` | Delete a network interface |
-| `GET` | `/api/devices/:id/history?from=&to=` | Get connection history for a time range |
-| `GET` | `/api/router/connected-devices` | Scrape router for currently connected devices |
+| `POST` | `/api/router/sync` | Scrape router for connected devices |
+| `POST` | `/api/router/restart-network` | Restart all routers (agents first, then controller) |
+| `GET` | `/api/settings/latest-router-status` | Get router status (WAN IP, uptime, performance metrics) |
+
+### Status Checks
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | `GET` | `/api/checks/latest` | Get the latest online check snapshot |
-| `GET` | `/api/router/status`| Get the status of connection and route controller system |
 
 ## License
 
