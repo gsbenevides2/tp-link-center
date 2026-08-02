@@ -76,3 +76,26 @@ jobs:
         run: |
           chmod +x .github/workflows/release/coolify.sh
           .github/workflows/release/coolify.sh
+  publish-types:
+    needs: prepare-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install
+      - name: Build and publish types package
+        run: |
+          chmod +x .github/workflows/release/publish-types.sh
+          .github/workflows/release/publish-types.sh
+        env:
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+          TOKEN_GITHUB: ${{ secrets.TOKEN_GITHUB }}
+          REPO_OWNER: ${{ github.repository_owner }}

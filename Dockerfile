@@ -27,4 +27,8 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
+LABEL org.opencontainers.image.source=https://github.com/gsbenevides2/tp-link-center
+LABEL org.opencontainers.image.description="TP Link Center is Admin Dashboard to manager my tplink routers."
+LABEL org.opencontainers.image.licenses=MIT
+
 CMD ["bun", "/app/server.js"]

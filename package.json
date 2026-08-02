@@ -1,13 +1,19 @@
 {
-  "name": "tp-link-center",
+  "name": "@gsbenevides2/tp-link-center",
   "displayName": "TP Link Center",
-  "version": "0.0.21",
-  "private": true,
+  "version": "0.0.23",
+  "private": false,
   "description": "TP Link Center is Admin Dashboard to manager my tplink routers.",
   "author": {
     "email": "git@gui.dev.br",
     "name": "Guilherme da Silva Benevides",
     "url": "https://www.gui.dev.br"
+  },
+  "types": "./dist/server/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/server/index.d.ts"
+    }
   },
   "repository": {
     "directory": ".",
@@ -66,5 +72,8 @@
   "trustedDependencies": [
     "sharp",
     "unrs-resolver"
-  ]
+  ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
 }

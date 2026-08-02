@@ -1,0 +1,9 @@
+# Ignora tudo por padrão
+*
+
+# Mas inclui estes arquivos (com !)
+!package.json
+!bun.lock
+!README.md
+!LICENSE
+!dist/**
