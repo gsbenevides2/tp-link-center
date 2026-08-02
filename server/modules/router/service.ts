@@ -15,6 +15,7 @@ import {
   DEV2_FW_CHAIN,
   DEV2_FW_CHAIN_RULE,
 } from "./types";
+import { Queue } from "@/server/utils/queue";
 
 const { BROWSER_URL, BROWSER_WSENDPOINT } = process.env;
 
@@ -26,27 +27,11 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const LOGIN_TIMEOUT_MS = 30_000;
 export class Router {
   private static browser: Browser | null = null;
-  private static processQueue: Array<{
-    id: string;
-    resolve: () => void;
-  }> = [];
+  private static getPageQueue = new Queue();
 
   private static vendorCache = new Map<string, string>();
 
   private static pageList = new Map<string, Page>();
-
-  private static async waitRelease(): Promise<void> {
-    const processId = crypto.randomUUID();
-    let resolve!: () => void;
-    const promise = new Promise<void>((r) => {
-      resolve = r;
-    });
-    this.processQueue.push({ id: processId, resolve });
-    if (this.processQueue[0].id === processId) {
-      return;
-    }
-    await promise;
-  }
 
   private static async getBrowser(): Promise<Browser> {
     if (this.browser && this.browser.connected) {
@@ -57,6 +42,7 @@ export class Router {
       browserWSEndpoint: BROWSER_WSENDPOINT,
     });
     this.browser?.on("disconnected", () => {
+      console.log("Browser disconnected. Clearing cached pages.");
       this.browser = null;
       this.pageList.clear();
     });
@@ -65,34 +51,31 @@ export class Router {
   }
 
   private static async getPage(ip: string, password: string): Promise<Page> {
-    const pageInCache = this.pageList.get(ip);
-    if (
-      pageInCache &&
-      pageInCache.isClosed() === false &&
-      pageInCache.browser().connected
-    ) {
-      if (!this.isLoggedIn(pageInCache)) {
-        await this.login(pageInCache, password);
+    return await this.getPageQueue.enqueue(async () => {
+      const pageInCache = this.pageList.get(ip);
+      if (
+        pageInCache &&
+        pageInCache.isClosed() === false &&
+        pageInCache.browser().connected
+      ) {
+        const isLoggedIn = await this.isLoggedIn(pageInCache, ip);
+        if (isLoggedIn === false) {
+          await this.login(pageInCache, password);
+        }
+        return pageInCache;
       }
-      return pageInCache;
-    }
-    const url = `http://${ip}`;
-    const browser = await this.getBrowser();
-    const page = await browser.newPage();
-    await page.goto(url);
-    await this.login(page, password);
-    this.pageList.set(ip, page);
-    return page;
+      const url = `http://${ip}`;
+      const browser = await this.getBrowser();
+      const page = await browser.newPage();
+      await page.goto(url);
+      await this.login(page, password);
+      this.pageList.set(ip, page);
+      return page;
+    });
   }
 
-  private static release() {
-    this.processQueue.shift();
-    if (this.processQueue.length > 0) {
-      this.processQueue[0].resolve();
-    }
-  }
-
-  private static async isLoggedIn(page: Page): Promise<boolean> {
+  private static async isLoggedIn(page: Page, ip: string): Promise<boolean> {
+    await page.goto(`http://${ip}`);
     const isLoggedOut = await this.safeEvaluate<boolean>(
       page,
       `$("#pc-login-password").is(":visible")`,
@@ -167,11 +150,11 @@ export class Router {
       }
       return response;
     } catch (error) {
+      this.browser = null;
+      this.pageList.clear();
       throw error;
     } finally {
       if (timeout) clearTimeout(timeout);
-      this.browser = null;
-      this.pageList.clear();
     }
   }
 
@@ -311,18 +294,13 @@ export class Router {
       );
     }
 
-    await this.waitRelease();
-    try {
-      const page = await this.getPage(controller.ip, controller.password);
-      const result = await Promise.all([
-        this.getConnectedEasyMeshDevices(page),
-        this.getConnectedWifiDevices(page),
-        this.getConnectedWiredDevices(page),
-      ]);
-      return result.flat().filter((result) => result.ip !== "");
-    } finally {
-      this.release();
-    }
+    const page = await this.getPage(controller.ip, controller.password);
+    const result = await Promise.all([
+      this.getConnectedEasyMeshDevices(page),
+      this.getConnectedWifiDevices(page),
+      this.getConnectedWiredDevices(page),
+    ]);
+    return result.flat().filter((result) => result.ip !== "");
   }
 
   static async listDHCPEntry(): Promise<DhcpEntries> {
@@ -333,21 +311,16 @@ export class Router {
       );
     }
 
-    await this.waitRelease();
-    try {
-      const page = await this.getPage(controller.ip, controller.password);
+    const page = await this.getPage(controller.ip, controller.password);
 
-      const DEV2_DHCPV4_POOL_STATICADDR = await this.makeDmCall<
-        DEV2_DHCPV4_POOL_STATICADDR[]
-      >("getList", "DEV2_DHCPV4_POOL_STATICADDR", {}, page);
-      return DEV2_DHCPV4_POOL_STATICADDR.map((e) => ({
-        ip: e.yiaddr,
-        mac: e.chaddr,
-        entryId: e.stack,
-      }));
-    } finally {
-      this.release();
-    }
+    const DEV2_DHCPV4_POOL_STATICADDR = await this.makeDmCall<
+      DEV2_DHCPV4_POOL_STATICADDR[]
+    >("getList", "DEV2_DHCPV4_POOL_STATICADDR", {}, page);
+    return DEV2_DHCPV4_POOL_STATICADDR.map((e) => ({
+      ip: e.yiaddr,
+      mac: e.chaddr,
+      entryId: e.stack,
+    }));
   }
 
   static async addDHCPEntry(mac: string, ip: string): Promise<string> {
@@ -358,26 +331,21 @@ export class Router {
       );
     }
 
-    await this.waitRelease();
-    try {
-      const page = await this.getPage(controller.ip, controller.password);
+    const page = await this.getPage(controller.ip, controller.password);
 
-      const result = await this.makeDmCall<{ stack: string }>(
-        "add",
-        "DEV2_DHCPV4_POOL_STATICADDR",
-        {
-          chaddr: mac,
-          yiaddr: ip,
-          enable: "1",
-          pstack: "1,0,0,0,0,0",
-        },
-        page,
-      );
+    const result = await this.makeDmCall<{ stack: string }>(
+      "add",
+      "DEV2_DHCPV4_POOL_STATICADDR",
+      {
+        chaddr: mac,
+        yiaddr: ip,
+        enable: "1",
+        pstack: "1,0,0,0,0,0",
+      },
+      page,
+    );
 
-      return result.stack;
-    } finally {
-      this.release();
-    }
+    return result.stack;
   }
 
   static async removeDHCPEntry(id: string) {
@@ -387,19 +355,14 @@ export class Router {
         "No controller router registered. Please register a router controller first.",
       );
     }
-    await this.waitRelease();
 
-    try {
-      const page = await this.getPage(controller.ip, controller.password);
-      await this.makeDmCall<void>(
-        "del",
-        "DEV2_DHCPV4_POOL_STATICADDR",
-        { stack: id },
-        page,
-      );
-    } finally {
-      this.release();
-    }
+    const page = await this.getPage(controller.ip, controller.password);
+    await this.makeDmCall<void>(
+      "del",
+      "DEV2_DHCPV4_POOL_STATICADDR",
+      { stack: id },
+      page,
+    );
   }
 
   static async listFirewallChains() {
@@ -410,26 +373,21 @@ export class Router {
       );
     }
 
-    await this.waitRelease();
-    try {
-      const page = await this.getPage(controller.ip, controller.password);
+    const page = await this.getPage(controller.ip, controller.password);
 
-      const chains = await this.makeDmCall<DEV2_FW_CHAIN[]>(
-        "getList",
-        "DEV2_FW_CHAIN",
-        {},
-        page,
-      );
+    const chains = await this.makeDmCall<DEV2_FW_CHAIN[]>(
+      "getList",
+      "DEV2_FW_CHAIN",
+      {},
+      page,
+    );
 
-      return chains.map((c) => ({
-        name: c.name,
-        enable: c.enable,
-        ruleNumberOfEntries: c.ruleNumberOfEntries,
-        stack: c.stack,
-      }));
-    } finally {
-      this.release();
-    }
+    return chains.map((c) => ({
+      name: c.name,
+      enable: c.enable,
+      ruleNumberOfEntries: c.ruleNumberOfEntries,
+      stack: c.stack,
+    }));
   }
 
   static async listFirewallRules() {
@@ -440,31 +398,26 @@ export class Router {
       );
     }
 
-    await this.waitRelease();
-    try {
-      const page = await this.getPage(controller.ip, controller.password);
+    const page = await this.getPage(controller.ip, controller.password);
 
-      const rawRules = await this.makeDmCall<DEV2_FW_CHAIN_RULE[]>(
-        "getList",
-        "DEV2_FW_CHAIN_RULE",
-        { pstack: "" },
-        page,
-      );
-      const rules = rawRules.map((r) => ({
-        ruleName: r.X_TP_RuleName,
-        ruleType: r.X_TP_RuleType,
-        sourceType: r.X_TP_SourceType,
-        sourceIP: r.sourceIP,
-        sourceMAC: r.X_TP_SourceMACAddress,
-        target: r.target,
-        enable: r.enable,
-        stack: r.stack,
-      }));
+    const rawRules = await this.makeDmCall<DEV2_FW_CHAIN_RULE[]>(
+      "getList",
+      "DEV2_FW_CHAIN_RULE",
+      { pstack: "" },
+      page,
+    );
+    const rules = rawRules.map((r) => ({
+      ruleName: r.X_TP_RuleName,
+      ruleType: r.X_TP_RuleType,
+      sourceType: r.X_TP_SourceType,
+      sourceIP: r.sourceIP,
+      sourceMAC: r.X_TP_SourceMACAddress,
+      target: r.target,
+      enable: r.enable,
+      stack: r.stack,
+    }));
 
-      return rules;
-    } finally {
-      this.release();
-    }
+    return rules;
   }
 
   static async addFirewallRule(params: {
@@ -481,33 +434,28 @@ export class Router {
       );
     }
 
-    await this.waitRelease();
-    try {
-      const page = await this.getPage(controller.ip, controller.password);
+    const page = await this.getPage(controller.ip, controller.password);
 
-      const data: Record<string, unknown> = {
-        enable: 1,
-        X_TP_RuleType: 2,
-        X_TP_RuleName: params.name,
-        X_TP_SourceType: 2,
-        X_TP_SourceMACAddress: params.sourceMAC,
-        pstack: params.chainStack,
-        target: params.target || "Drop",
-      };
-      if (params.sourceIP) {
-        data.sourceIP = params.sourceIP;
-      }
-      const result = await this.makeDmCall<{ stack: string }>(
-        "add",
-        "DEV2_FW_CHAIN_RULE",
-        data,
-        page,
-      );
-
-      return result.stack;
-    } finally {
-      this.release();
+    const data: Record<string, unknown> = {
+      enable: 1,
+      X_TP_RuleType: 2,
+      X_TP_RuleName: params.name,
+      X_TP_SourceType: 2,
+      X_TP_SourceMACAddress: params.sourceMAC,
+      pstack: params.chainStack,
+      target: params.target || "Drop",
+    };
+    if (params.sourceIP) {
+      data.sourceIP = params.sourceIP;
     }
+    const result = await this.makeDmCall<{ stack: string }>(
+      "add",
+      "DEV2_FW_CHAIN_RULE",
+      data,
+      page,
+    );
+
+    return result.stack;
   }
 
   static async removeFirewallRule(ruleStack: string) {
@@ -518,44 +466,34 @@ export class Router {
       );
     }
 
-    await this.waitRelease();
-    try {
-      const page = await this.getPage(controller.ip, controller.password);
-      await this.makeDmCall<void>(
-        "del",
-        "DEV2_FW_CHAIN_RULE",
-        { stack: ruleStack },
-        page,
-      );
-    } finally {
-      this.release();
-    }
+    const page = await this.getPage(controller.ip, controller.password);
+    await this.makeDmCall<void>(
+      "del",
+      "DEV2_FW_CHAIN_RULE",
+      { stack: ruleStack },
+      page,
+    );
   }
 
   static async restartNetwork() {
-    await this.waitRelease();
-    try {
-      const allRouters = await Device.getAllRouters();
-      const controller = allRouters.find((r) => r.isController);
-      const agents = allRouters.filter((r) => !r.isController);
-      for (const agent of agents) {
-        try {
-          const page = await this.getPage(agent.ip, agent.password);
-          await this.rebootRouter(page);
-        } catch (error) {
-          console.error(`Error rebooting agent ${agent.ip}:`, error);
-        }
+    const allRouters = await Device.getAllRouters();
+    const controller = allRouters.find((r) => r.isController);
+    const agents = allRouters.filter((r) => !r.isController);
+    for (const agent of agents) {
+      try {
+        const page = await this.getPage(agent.ip, agent.password);
+        await this.rebootRouter(page);
+      } catch (error) {
+        console.error(`Error rebooting agent ${agent.ip}:`, error);
       }
-      if (controller) {
-        try {
-          const page = await this.getPage(controller.ip, controller.password);
-          await this.rebootRouter(page);
-        } catch (error) {
-          console.error(`Error rebooting controller ${controller.ip}:`, error);
-        }
+    }
+    if (controller) {
+      try {
+        const page = await this.getPage(controller.ip, controller.password);
+        await this.rebootRouter(page);
+      } catch (error) {
+        console.error(`Error rebooting controller ${controller.ip}:`, error);
       }
-    } finally {
-      this.release();
     }
   }
 
@@ -567,72 +505,64 @@ export class Router {
       );
     }
 
-    await this.waitRelease();
-    let page: Page | undefined;
-    try {
-      page = await this.getPage(controller.ip, controller.password);
+    const page = await this.getPage(controller.ip, controller.password);
 
-      const [wanInfo, devInfo, memoryStatus, procStatus] = await Promise.all([
-        this.makeDmCall<DEV2_ADT_WAN[]>("getList", "DEV2_ADT_WAN", {}, page),
-        this.makeDmCall<DEV2_DEV_INFO>("get", "DEV2_DEV_INFO", {}, page),
-        this.makeDmCall<DEV2_MEM_STATUS>("get", "DEV2_MEM_STATUS", {}, page),
-        this.makeDmCall<DEV2_PROC_STATUS>("get", "DEV2_PROC_STATUS", {}, page),
-      ]);
+    const [wanInfo, devInfo, memoryStatus, procStatus] = await Promise.all([
+      this.makeDmCall<DEV2_ADT_WAN[]>("getList", "DEV2_ADT_WAN", {}, page),
+      this.makeDmCall<DEV2_DEV_INFO>("get", "DEV2_DEV_INFO", {}, page),
+      this.makeDmCall<DEV2_MEM_STATUS>("get", "DEV2_MEM_STATUS", {}, page),
+      this.makeDmCall<DEV2_PROC_STATUS>("get", "DEV2_PROC_STATUS", {}, page),
+    ]);
 
-      const wanIp = wanInfo.at(0)?.connIPv4Address ?? "";
-      const connectionStatus = wanInfo.at(0)?.connStatusV4;
-      const connectionUptime = Number(wanInfo.at(0)?.X_TP_Uptime);
-      const totalDownload = Number(wanInfo.at(0)?.X_TP_BytesReceived);
-      const totalUpload = Number(wanInfo.at(0)?.X_TP_BytesSent);
+    const wanIp = wanInfo.at(0)?.connIPv4Address ?? "";
+    const connectionStatus = wanInfo.at(0)?.connStatusV4;
+    const connectionUptime = Number(wanInfo.at(0)?.X_TP_Uptime);
+    const totalDownload = Number(wanInfo.at(0)?.X_TP_BytesReceived);
+    const totalUpload = Number(wanInfo.at(0)?.X_TP_BytesSent);
 
-      const routerUptime = Number(devInfo.upTime);
+    const routerUptime = Number(devInfo.upTime);
 
-      const freeMemory = Number(memoryStatus.free);
-      const totalMemory = Number(memoryStatus.total);
-      const usedMemory = totalMemory - freeMemory;
-      const memoryUsage = parseInt(
-        ((usedMemory / totalMemory) * 100).toString(),
-      );
+    const freeMemory = Number(memoryStatus.free);
+    const totalMemory = Number(memoryStatus.total);
+    const usedMemory = totalMemory - freeMemory;
+    const memoryUsage = parseInt(((usedMemory / totalMemory) * 100).toString());
 
-      const cpuUsage = Number(procStatus.CPUUsage);
+    const cpuUsage = Number(procStatus.CPUUsage);
 
-      // Helper to format seconds to human readable
-      const formatUptime = (totalSeconds: number): string => {
-        if (!totalSeconds) return "N/A";
-        const days = Math.floor(totalSeconds / 86400);
-        const hours = Math.floor((totalSeconds % 86400) / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const parts: string[] = [];
-        if (days > 0) parts.push(`${days}d`);
-        if (hours > 0) parts.push(`${hours}h`);
-        if (minutes > 0) parts.push(`${minutes}m`);
-        if (parts.length === 0) parts.push(`${totalSeconds}s`);
-        return parts.join(" ");
-      };
+    // Helper to format seconds to human readable
+    const formatUptime = (totalSeconds: number): string => {
+      if (!totalSeconds) return "N/A";
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const parts: string[] = [];
+      if (days > 0) parts.push(`${days}d`);
+      if (hours > 0) parts.push(`${hours}h`);
+      if (minutes > 0) parts.push(`${minutes}m`);
+      if (parts.length === 0) parts.push(`${totalSeconds}s`);
+      return parts.join(" ");
+    };
 
-      // Helper to format bytes to human readable
-      const formatBytes = (b: number): string => {
-        if (isNaN(b)) return "N/A";
-        if (b >= 1073741824) return `${(b / 1073741824).toFixed(1)} GB`;
-        if (b >= 1048576) return `${(b / 1048576).toFixed(1)} MB`;
-        if (b >= 1024) return `${(b / 1024).toFixed(1)} KB`;
-        return `${b} B`;
-      };
+    // Helper to format bytes to human readable
+    const formatBytes = (b: number): string => {
+      if (isNaN(b)) return "N/A";
+      if (b >= 1073741824) return `${(b / 1073741824).toFixed(1)} GB`;
+      if (b >= 1048576) return `${(b / 1048576).toFixed(1)} MB`;
+      if (b >= 1024) return `${(b / 1024).toFixed(1)} KB`;
+      return `${b} B`;
+    };
 
-      return {
-        wanIp,
-        connectionStatus: connectionStatus || "Unknown",
-        connectionUptime: formatUptime(connectionUptime),
-        routerUptime: formatUptime(routerUptime),
-        firmwareVersion: devInfo?.softwareVersion || "N/A",
-        hardwareVersion: devInfo?.hardwareVersion || "N/A",
-        cpuUsage,
-        memoryUsage,
-        totalDownload: formatBytes(totalDownload),
-        totalUpload: formatBytes(totalUpload),
-      };
-    } finally {
-      this.release();
-    }
+    return {
+      wanIp,
+      connectionStatus: connectionStatus || "Unknown",
+      connectionUptime: formatUptime(connectionUptime),
+      routerUptime: formatUptime(routerUptime),
+      firmwareVersion: devInfo?.softwareVersion || "N/A",
+      hardwareVersion: devInfo?.hardwareVersion || "N/A",
+      cpuUsage,
+      memoryUsage,
+      totalDownload: formatBytes(totalDownload),
+      totalUpload: formatBytes(totalUpload),
+    };
   }
 }
