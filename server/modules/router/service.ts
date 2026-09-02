@@ -1,7 +1,22 @@
 import puppeteer, { type Page, type Browser } from "puppeteer-core";
 import getVendor from "mac-oui-lookup";
 import { Device } from "../devices/service";
-import { DEV2_ADT_WAN, DEV2_DEV_INFO, DEV2_MEM_STATUS, DEV2_PROC_STATUS, DEV2_WIFI_APDEV, DEV2_WIFI_APDEV_ASSOCDEV, DEV2_WIFI_APDEV_RADIO, DEV2_WIFI_APDEV_ETHASSOCDEV, DEV2_DHCPV4_POOL_STATICADDR, DEV2_FW_CHAIN, DEV2_FW_CHAIN_RULE, ConnectedDevices, DhcpEntries, RouterStatus } from "./types";
+import {
+  DEV2_ADT_WAN,
+  DEV2_DEV_INFO,
+  DEV2_MEM_STATUS,
+  DEV2_PROC_STATUS,
+  DEV2_WIFI_APDEV,
+  DEV2_WIFI_APDEV_ASSOCDEV,
+  DEV2_WIFI_APDEV_RADIO,
+  DEV2_WIFI_APDEV_ETHASSOCDEV,
+  DEV2_DHCPV4_POOL_STATICADDR,
+  DEV2_FW_CHAIN,
+  DEV2_FW_CHAIN_RULE,
+  ConnectedDevices,
+  DhcpEntries,
+  RouterStatus,
+} from "./types";
 import { Queue } from "@/server/utils/queue";
 import { db } from "@/server/db";
 import { normalizeMac } from "@/server/utils/normalizeMac";
@@ -41,7 +56,11 @@ export class Router {
   private static async getPage(ip: string, password: string): Promise<Page> {
     return await this.getPageQueue.enqueue(async () => {
       const pageInCache = this.pageList.get(ip);
-      if (pageInCache && pageInCache.isClosed() === false && pageInCache.browser().connected) {
+      if (
+        pageInCache &&
+        pageInCache.isClosed() === false &&
+        pageInCache.browser().connected
+      ) {
         const isLoggedIn = await this.isLoggedIn(pageInCache, ip);
         if (isLoggedIn === false) {
           await this.login(pageInCache, password);
@@ -60,33 +79,53 @@ export class Router {
 
   private static async isLoggedIn(page: Page, ip: string): Promise<boolean> {
     await page.goto(`http://${ip}`);
-    const isLoggedOut = await this.safeEvaluate<boolean>(page, `$("#pc-login-password").is(":visible")`);
+    const isLoggedOut = await this.safeEvaluate<boolean>(
+      page,
+      `$("#pc-login-password").is(":visible")`,
+    );
     return !isLoggedOut;
   }
 
   private static async login(page: Page, password: string) {
     await wait(200);
-    const isLoggedOut = await this.safeEvaluate<boolean>(page, `$("#pc-login-password").is(":visible")`);
+    const isLoggedOut = await this.safeEvaluate<boolean>(
+      page,
+      `$("#pc-login-password").is(":visible")`,
+    );
     if (!isLoggedOut) return;
     await page.evaluate((pwd) => {
-      const input = document.querySelector("#pc-login-password") as HTMLInputElement | null;
+      const input = document.querySelector(
+        "#pc-login-password",
+      ) as HTMLInputElement | null;
       if (input) input.value = pwd;
     }, password);
     await wait(100);
     await this.safeEvaluate(page, `$("#pc-login-btn").click()`);
 
-    while (true) {
+    const deadline = Date.now() + LOGIN_TIMEOUT_MS;
+    while (Date.now() < deadline) {
       await wait(100);
-      const isInvalid = await this.safeEvaluate<boolean>(page, `$(".content.error-tips-content").is(":visible")`).catch(() => false);
+      const isInvalid = await this.safeEvaluate<boolean>(
+        page,
+        `$(".content.error-tips-content").is(":visible")`,
+      ).catch(() => false);
       if (isInvalid) throw new Error("Password is Invalid for: " + page.url());
-      const isForcing = await this.safeEvaluate<boolean>(page, `$("#confirm-yes").is(":visible")`).catch(() => false);
+      const isForcing = await this.safeEvaluate<boolean>(
+        page,
+        `$("#confirm-yes").is(":visible")`,
+      ).catch(() => false);
       if (isForcing) {
         await this.safeEvaluate(page, `$("#confirm-yes").click()`);
       }
-      const isLogged = await this.safeEvaluate<boolean>(page, `$("#topReboot").is(":visible")`).catch(() => false);
-      if (isLogged) break;
+      const isLogged = await this.safeEvaluate<boolean>(
+        page,
+        `$("#topReboot").is(":visible")`,
+      ).catch(() => false);
+      if (isLogged) return;
     }
-    throw new Error(`Login timeout after ${LOGIN_TIMEOUT_MS}ms for: ${page.url()}`);
+    throw new Error(
+      `Login timeout after ${LOGIN_TIMEOUT_MS}ms for: ${page.url()}`,
+    );
   }
 
   private static async evaluate<T>(page: Page, script: string): Promise<T> {
@@ -94,7 +133,11 @@ export class Router {
     return page.evaluate(script) as any as Promise<T>;
   }
 
-  private static async safeEvaluate<T>(page: Page, script: string, timeoutMs = 30_000): Promise<T> {
+  private static async safeEvaluate<T>(
+    page: Page,
+    script: string,
+    timeoutMs = 30_000,
+  ): Promise<T> {
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       const response = await Promise.race([
@@ -104,7 +147,9 @@ export class Router {
         }),
       ]);
       if (response === "timeout call") {
-        throw new Error(`Evaluate timed out after ${timeoutMs}ms for: ${page.url()}`);
+        throw new Error(
+          `Evaluate timed out after ${timeoutMs}ms for: ${page.url()}`,
+        );
       }
       return response;
     } catch (error) {
@@ -116,7 +161,13 @@ export class Router {
     }
   }
 
-  private static async makeDmCall<T>(method: string, oid: string, data: Record<string, unknown> = {}, page: Page, timeoutMs = 30_000): Promise<T> {
+  private static async makeDmCall<T>(
+    method: string,
+    oid: string,
+    data: Record<string, unknown> = {},
+    page: Page,
+    timeoutMs = 30_000,
+  ): Promise<T> {
     const str = `(function(){
       return new Promise((resolve, reject)=>{
         $.dm.${method}({
@@ -142,8 +193,15 @@ export class Router {
     return this.vendorCache.get(oui)!;
   }
 
-  private static async getConnectedEasyMeshDevices(page: Page): Promise<ConnectedDevices> {
-    const DEV2_WIFI_APDEV = await this.makeDmCall<DEV2_WIFI_APDEV[]>("getList", "DEV2_WIFI_APDEV", {}, page);
+  private static async getConnectedEasyMeshDevices(
+    page: Page,
+  ): Promise<ConnectedDevices> {
+    const DEV2_WIFI_APDEV = await this.makeDmCall<DEV2_WIFI_APDEV[]>(
+      "getList",
+      "DEV2_WIFI_APDEV",
+      {},
+      page,
+    );
 
     function processBackLinkType(type: string) {
       if (type === "Ethernet") {
@@ -155,34 +213,52 @@ export class Router {
       }
     }
     return await Promise.all(
-      DEV2_WIFI_APDEV.filter((item) => item.X_TP_Active === "1").map(async (item) => ({
-        ip: item.X_TP_IPAddress,
-        mac: item.MACAddress,
-        name: (await Device.getDeviceNameOfMac(item.MACAddress)) || item.X_TP_HostName || "Unknown",
-        routerInterface: processBackLinkType(item.backhaulLinkType),
-        vendor: this.getVendorCached(item.MACAddress),
-      })),
+      DEV2_WIFI_APDEV.filter((item) => item.X_TP_Active === "1").map(
+        async (item) => ({
+          ip: item.X_TP_IPAddress,
+          mac: item.MACAddress,
+          name:
+            (await Device.getDeviceNameOfMac(item.MACAddress)) ||
+            item.X_TP_HostName ||
+            "Unknown",
+          routerInterface: processBackLinkType(item.backhaulLinkType),
+          vendor: this.getVendorCached(item.MACAddress),
+        }),
+      ),
     );
   }
 
-  private static async getConnectedWifiDevices(page: Page): Promise<ConnectedDevices> {
-    const DEV2_WIFI_APDEV_ASSOCDEV = await this.makeDmCall<DEV2_WIFI_APDEV_ASSOCDEV[]>("getList", "DEV2_WIFI_APDEV_ASSOCDEV", {}, page);
+  private static async getConnectedWifiDevices(
+    page: Page,
+  ): Promise<ConnectedDevices> {
+    const DEV2_WIFI_APDEV_ASSOCDEV = await this.makeDmCall<
+      DEV2_WIFI_APDEV_ASSOCDEV[]
+    >("getList", "DEV2_WIFI_APDEV_ASSOCDEV", {}, page);
 
-    const DEV2_WIFI_APDEV_RADIO = await this.makeDmCall<DEV2_WIFI_APDEV_RADIO[]>("getList", "DEV2_WIFI_APDEV_RADIO", {}, page);
+    const DEV2_WIFI_APDEV_RADIO = await this.makeDmCall<
+      DEV2_WIFI_APDEV_RADIO[]
+    >("getList", "DEV2_WIFI_APDEV_RADIO", {}, page);
     function getRouterInterface(radioMac: string) {
-      const data = DEV2_WIFI_APDEV_RADIO.find((item) => item.MACAddress === radioMac);
+      const data = DEV2_WIFI_APDEV_RADIO.find(
+        (item) => item.MACAddress === radioMac,
+      );
       if (!data) return "Unknown";
       return `Wifi ${data.operatingFrequencyBand} GHz no Canal ${data.channel}`;
     }
 
     return await Promise.all(
-      DEV2_WIFI_APDEV_ASSOCDEV.filter((item) => item.active === "1").map(async (item) => ({
-        ip: item.X_TP_IPAddress,
-        mac: item.MACAddress,
-        name: (await Device.getDeviceNameOfMac(item.MACAddress)) || item.X_TP_HostName || "Unknown",
-        vendor: this.getVendorCached(item.MACAddress),
-        routerInterface: getRouterInterface(item.X_TP_RadioMac),
-      })),
+      DEV2_WIFI_APDEV_ASSOCDEV.filter((item) => item.active === "1").map(
+        async (item) => ({
+          ip: item.X_TP_IPAddress,
+          mac: item.MACAddress,
+          name:
+            (await Device.getDeviceNameOfMac(item.MACAddress)) ||
+            item.X_TP_HostName ||
+            "Unknown",
+          vendor: this.getVendorCached(item.MACAddress),
+          routerInterface: getRouterInterface(item.X_TP_RadioMac),
+        }),
+      ),
     );
   }
 
@@ -190,30 +266,47 @@ export class Router {
     await this.makeDmCall<void>("op", "ACT_REBOOT", {}, page);
   }
 
-  private static async getConnectedWiredDevices(page: Page): Promise<ConnectedDevices> {
-    const DEV2_WIFI_APDEV_ETHASSOCDEV = await this.makeDmCall<DEV2_WIFI_APDEV_ETHASSOCDEV[]>("getList", "DEV2_WIFI_APDEV_ETHASSOCDEV", {}, page);
+  private static async getConnectedWiredDevices(
+    page: Page,
+  ): Promise<ConnectedDevices> {
+    const DEV2_WIFI_APDEV_ETHASSOCDEV = await this.makeDmCall<
+      DEV2_WIFI_APDEV_ETHASSOCDEV[]
+    >("getList", "DEV2_WIFI_APDEV_ETHASSOCDEV", {}, page);
 
     return await Promise.all(
-      DEV2_WIFI_APDEV_ETHASSOCDEV.filter((i) => i.active === "1").map(async (i) => ({
-        ip: i.IPAddress,
-        mac: i.MACAddress,
-        name: (await Device.getDeviceNameOfMac(i.MACAddress)) || i.X_TP_HostName || "Unknown",
-        routerInterface: "Cabeada",
-        vendor: this.getVendorCached(i.MACAddress),
-      })),
+      DEV2_WIFI_APDEV_ETHASSOCDEV.filter((i) => i.active === "1").map(
+        async (i) => ({
+          ip: i.IPAddress,
+          mac: i.MACAddress,
+          name:
+            (await Device.getDeviceNameOfMac(i.MACAddress)) ||
+            i.X_TP_HostName ||
+            "Unknown",
+          routerInterface: "Cabeada",
+          vendor: this.getVendorCached(i.MACAddress),
+        }),
+      ),
     );
   }
 
-  private static async getConnectedDevices(page?: Page): Promise<ConnectedDevices> {
+  private static async getConnectedDevices(
+    page?: Page,
+  ): Promise<ConnectedDevices> {
     if (!page) {
       const controller = await Device.getControllerRouter();
       if (!controller) {
-        throw new Error("No controller router registered. Please register a router controller first.");
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
       }
 
       page = await this.getPage(controller.ip, controller.password);
     }
-    const result = await Promise.all([this.getConnectedEasyMeshDevices(page), this.getConnectedWifiDevices(page), this.getConnectedWiredDevices(page)]);
+    const result = await Promise.all([
+      this.getConnectedEasyMeshDevices(page),
+      this.getConnectedWifiDevices(page),
+      this.getConnectedWiredDevices(page),
+    ]);
     return result.flat().filter((result) => result.ip !== "");
   }
 
@@ -221,12 +314,16 @@ export class Router {
     if (!page) {
       const controller = await Device.getControllerRouter();
       if (!controller) {
-        throw new Error("No controller router registered. Please register a router controller first.");
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
       }
 
       page = await this.getPage(controller.ip, controller.password);
     }
-    const DEV2_DHCPV4_POOL_STATICADDR = await this.makeDmCall<DEV2_DHCPV4_POOL_STATICADDR[]>("getList", "DEV2_DHCPV4_POOL_STATICADDR", {}, page);
+    const DEV2_DHCPV4_POOL_STATICADDR = await this.makeDmCall<
+      DEV2_DHCPV4_POOL_STATICADDR[]
+    >("getList", "DEV2_DHCPV4_POOL_STATICADDR", {}, page);
     return DEV2_DHCPV4_POOL_STATICADDR.map((e) => ({
       ip: e.yiaddr,
       mac: e.chaddr,
@@ -234,11 +331,17 @@ export class Router {
     }));
   }
 
-  private static async addDHCPEntry(mac: string, ip: string, page?: Page): Promise<string> {
+  private static async addDHCPEntry(
+    mac: string,
+    ip: string,
+    page?: Page,
+  ): Promise<string> {
     if (!page) {
       const controller = await Device.getControllerRouter();
       if (!controller) {
-        throw new Error("No controller router registered. Please register a router controller first.");
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
       }
 
       page = await this.getPage(controller.ip, controller.password);
@@ -262,23 +365,37 @@ export class Router {
     if (!page) {
       const controller = await Device.getControllerRouter();
       if (!controller) {
-        throw new Error("No controller router registered. Please register a router controller first.");
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
       }
 
       page = await this.getPage(controller.ip, controller.password);
     }
-    await this.makeDmCall<void>("del", "DEV2_DHCPV4_POOL_STATICADDR", { stack: id }, page);
+    await this.makeDmCall<void>(
+      "del",
+      "DEV2_DHCPV4_POOL_STATICADDR",
+      { stack: id },
+      page,
+    );
   }
 
   private static async listFirewallChains(page?: Page) {
     if (!page) {
       const controller = await Device.getControllerRouter();
       if (!controller) {
-        throw new Error("No controller router registered. Please register a router controller first.");
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
       }
       page = await this.getPage(controller.ip, controller.password);
     }
-    const chains = await this.makeDmCall<DEV2_FW_CHAIN[]>("getList", "DEV2_FW_CHAIN", {}, page);
+    const chains = await this.makeDmCall<DEV2_FW_CHAIN[]>(
+      "getList",
+      "DEV2_FW_CHAIN",
+      {},
+      page,
+    );
 
     return chains.map((c) => ({
       name: c.name,
@@ -292,11 +409,18 @@ export class Router {
     if (!page) {
       const controller = await Device.getControllerRouter();
       if (!controller) {
-        throw new Error("No controller router registered. Please register a router controller first.");
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
       }
       page = await this.getPage(controller.ip, controller.password);
     }
-    const rawRules = await this.makeDmCall<DEV2_FW_CHAIN_RULE[]>("getList", "DEV2_FW_CHAIN_RULE", { pstack: "" }, page);
+    const rawRules = await this.makeDmCall<DEV2_FW_CHAIN_RULE[]>(
+      "getList",
+      "DEV2_FW_CHAIN_RULE",
+      { pstack: "" },
+      page,
+    );
     const rules = rawRules.map((r) => ({
       ruleName: r.X_TP_RuleName,
       ruleType: r.X_TP_RuleType,
@@ -324,7 +448,9 @@ export class Router {
     if (!page) {
       const controller = await Device.getControllerRouter();
       if (!controller) {
-        throw new Error("No controller router registered. Please register a router controller first.");
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
       }
 
       page = await this.getPage(controller.ip, controller.password);
@@ -341,7 +467,12 @@ export class Router {
     if (params.sourceIP) {
       data.sourceIP = params.sourceIP;
     }
-    const result = await this.makeDmCall<{ stack: string }>("add", "DEV2_FW_CHAIN_RULE", data, page);
+    const result = await this.makeDmCall<{ stack: string }>(
+      "add",
+      "DEV2_FW_CHAIN_RULE",
+      data,
+      page,
+    );
 
     return result.stack;
   }
@@ -350,12 +481,19 @@ export class Router {
     if (!page) {
       const controller = await Device.getControllerRouter();
       if (!controller) {
-        throw new Error("No controller router registered. Please register a router controller first.");
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
       }
 
       page = await this.getPage(controller.ip, controller.password);
     }
-    await this.makeDmCall<void>("del", "DEV2_FW_CHAIN_RULE", { stack: ruleStack }, page);
+    await this.makeDmCall<void>(
+      "del",
+      "DEV2_FW_CHAIN_RULE",
+      { stack: ruleStack },
+      page,
+    );
   }
 
   static async restartNetwork() {
@@ -384,12 +522,19 @@ export class Router {
     if (!page) {
       const controller = await Device.getControllerRouter();
       if (!controller) {
-        throw new Error("No controller router registered. Please register a router controller first.");
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
       }
 
       page = await this.getPage(controller.ip, controller.password);
     }
-    const [wanInfo, devInfo, memoryStatus, procStatus] = await Promise.all([this.makeDmCall<DEV2_ADT_WAN[]>("getList", "DEV2_ADT_WAN", {}, page), this.makeDmCall<DEV2_DEV_INFO>("get", "DEV2_DEV_INFO", {}, page), this.makeDmCall<DEV2_MEM_STATUS>("get", "DEV2_MEM_STATUS", {}, page), this.makeDmCall<DEV2_PROC_STATUS>("get", "DEV2_PROC_STATUS", {}, page)]);
+    const [wanInfo, devInfo, memoryStatus, procStatus] = await Promise.all([
+      this.makeDmCall<DEV2_ADT_WAN[]>("getList", "DEV2_ADT_WAN", {}, page),
+      this.makeDmCall<DEV2_DEV_INFO>("get", "DEV2_DEV_INFO", {}, page),
+      this.makeDmCall<DEV2_MEM_STATUS>("get", "DEV2_MEM_STATUS", {}, page),
+      this.makeDmCall<DEV2_PROC_STATUS>("get", "DEV2_PROC_STATUS", {}, page),
+    ]);
 
     const wanIp = wanInfo.at(0)?.connIPv4Address ?? "";
     const connectionStatus = wanInfo.at(0)?.connStatusV4;
@@ -455,18 +600,28 @@ export class Router {
       },
     });
 
-    const interfacesToSync = dbInterfaces.filter((i) => i.device?.type === "client" || (i.device?.type === "router" && !i.device.isController));
+    const interfacesToSync = dbInterfaces.filter(
+      (i) =>
+        i.device?.type === "client" ||
+        (i.device?.type === "router" && !i.device.isController),
+    );
 
     const routerEntries = await this.listDHCPEntry(page);
 
     const dbMacs = new Set(interfacesToSync.map((i) => normalizeMac(i.mac)));
-    const routerMacToEntry = new Map(routerEntries.map((e) => [normalizeMac(e.mac), e]));
+    const routerMacToEntry = new Map(
+      routerEntries.map((e) => [normalizeMac(e.mac), e]),
+    );
 
     for (const entry of routerEntries) {
       const normalizedMac = normalizeMac(entry.mac);
       if (!dbMacs.has(normalizedMac)) {
         await Router.removeDHCPEntry(entry.entryId, page).catch((e) => {
-          console.error(`Failed to remove DHCP entry for ${entry.mac}: ${e instanceof Error ? e.message : String(e)}`);
+          console.error(
+            `Failed to remove DHCP entry for ${entry.mac}: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          );
         });
       }
     }
@@ -475,7 +630,11 @@ export class Router {
       const normalizedMac = normalizeMac(iface.mac);
       if (!routerMacToEntry.has(normalizedMac)) {
         await Router.addDHCPEntry(iface.mac, iface.ip, page).catch((e) => {
-          console.error(`Failed to add DHCP entry for ${iface.mac}: ${e instanceof Error ? e.message : String(e)}`);
+          console.error(
+            `Failed to add DHCP entry for ${iface.mac}: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          );
         });
       }
     }
@@ -491,7 +650,9 @@ export class Router {
       },
     });
 
-    const clientInterfaces = dbInterfaces.filter((i) => i.device?.type === "client");
+    const clientInterfaces = dbInterfaces.filter(
+      (i) => i.device?.type === "client",
+    );
 
     const chains = await this.listFirewallChains(page);
     const accessChain = chains.find((c) => c.name === "ACCESSCTL_WHITE");
@@ -501,16 +662,24 @@ export class Router {
     }
 
     const allRouterRules = await this.listFirewallRules(page);
-    const routerRules = allRouterRules.filter((r) => r.stack[0] === accessChain.stack[0]);
+    const routerRules = allRouterRules.filter(
+      (r) => r.stack[0] === accessChain.stack[0],
+    );
 
     const dbMacs = new Set(clientInterfaces.map((i) => normalizeMac(i.mac)));
-    const routerMacToRule = new Map(routerRules.map((r) => [normalizeMac(r.sourceMAC), r]));
+    const routerMacToRule = new Map(
+      routerRules.map((r) => [normalizeMac(r.sourceMAC), r]),
+    );
 
     for (const rule of routerRules) {
       const normalizedMac = normalizeMac(rule.sourceMAC);
       if (!dbMacs.has(normalizedMac)) {
         await this.removeFirewallRule(rule.stack, page).catch((e) => {
-          console.error(`Failed to remove firewall rule for ${rule.sourceMAC}: ${e instanceof Error ? e.message : String(e)}`);
+          console.error(
+            `Failed to remove firewall rule for ${rule.sourceMAC}: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          );
         });
       }
     }
@@ -527,7 +696,11 @@ export class Router {
           },
           page,
         ).catch((e) => {
-          console.error(`Failed to add firewall rule for ${iface.mac}: ${e instanceof Error ? e.message : String(e)}`);
+          console.error(
+            `Failed to add firewall rule for ${iface.mac}: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          );
         });
       }
     }
@@ -565,7 +738,9 @@ export class Router {
     try {
       const controller = await Device.getControllerRouter();
       if (!controller) {
-        throw new Error("No controller router registered. Please register a router controller first.");
+        throw new Error(
+          "No controller router registered. Please register a router controller first.",
+        );
       }
 
       const page = await this.getPage(controller.ip, controller.password);
@@ -575,7 +750,10 @@ export class Router {
       await this.syncRouterStatus(page);
     } catch (error) {
       console.error("Error syncing router settings:", error);
-      throw new Error("Error syncing router settings: " + (error instanceof Error ? error.message : String(error)));
+      throw new Error(
+        "Error syncing router settings: " +
+          (error instanceof Error ? error.message : String(error)),
+      );
     }
   }
 }
