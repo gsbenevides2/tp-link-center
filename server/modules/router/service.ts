@@ -1,137 +1,22 @@
-import puppeteer, { type Page, type Browser } from "puppeteer-core";
 import getVendor from "mac-oui-lookup";
 import { Device } from "../devices/service";
 import { DEV2_ADT_WAN, DEV2_DEV_INFO, DEV2_MEM_STATUS, DEV2_PROC_STATUS, DEV2_WIFI_APDEV, DEV2_WIFI_APDEV_ASSOCDEV, DEV2_WIFI_APDEV_RADIO, DEV2_WIFI_APDEV_ETHASSOCDEV, DEV2_DHCPV4_POOL_STATICADDR, DEV2_FW_CHAIN, DEV2_FW_CHAIN_RULE, ConnectedDevices, DhcpEntries, RouterStatus } from "./types";
-import { Queue } from "@/server/utils/queue";
 import { db } from "@/server/db";
 import { normalizeMac } from "@/server/utils/normalizeMac";
 import { onlineChecks, onlineDevicesChecks } from "@/server/db/schema";
 import { Settings } from "../settings/service";
-
-const { BROWSER_URL, BROWSER_WSENDPOINT } = process.env;
-
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-const LOGIN_TIMEOUT_MS = 30_000;
+import { TpLinkClient } from "@/server/lib/tplink/client";
 export class Router {
-  private static browser: Browser | null = null;
-  private static getPageQueue = new Queue();
-
   private static vendorCache = new Map<string, string>();
 
-  private static pageList = new Map<string, Page>();
-
-  private static async getBrowser(): Promise<Browser> {
-    if (this.browser && this.browser.connected) {
-      return this.browser;
-    }
-    const browser = await puppeteer.connect({
-      browserURL: BROWSER_URL,
-      browserWSEndpoint: BROWSER_WSENDPOINT,
+  private static async getRouterClient(ip: string, password: string) {
+    const client = new TpLinkClient({
+      host: ip,
+      username: "user",
+      password,
     });
-    this.browser?.on("disconnected", () => {
-      console.log("Browser disconnected. Clearing cached pages.");
-      this.browser = null;
-      this.pageList.clear();
-    });
-    this.browser = browser;
-    return browser;
-  }
-
-  private static async getPage(ip: string, password: string): Promise<Page> {
-    return await this.getPageQueue.enqueue(async () => {
-      const pageInCache = this.pageList.get(ip);
-      if (pageInCache && pageInCache.isClosed() === false && pageInCache.browser().connected) {
-        const isLoggedIn = await this.isLoggedIn(pageInCache, ip);
-        if (isLoggedIn === false) {
-          await this.login(pageInCache, password);
-        }
-        return pageInCache;
-      }
-      const url = `http://${ip}`;
-      const browser = await this.getBrowser();
-      const page = await browser.newPage();
-      await page.goto(url);
-      await this.login(page, password);
-      this.pageList.set(ip, page);
-      return page;
-    });
-  }
-
-  private static async isLoggedIn(page: Page, ip: string): Promise<boolean> {
-    await page.goto(`http://${ip}`);
-    const isLoggedOut = await this.safeEvaluate<boolean>(page, `$("#pc-login-password").is(":visible")`);
-    return !isLoggedOut;
-  }
-
-  private static async login(page: Page, password: string) {
-    await wait(200);
-    const isLoggedOut = await this.safeEvaluate<boolean>(page, `$("#pc-login-password").is(":visible")`);
-    if (!isLoggedOut) return;
-    await page.evaluate((pwd) => {
-      const input = document.querySelector("#pc-login-password") as HTMLInputElement | null;
-      if (input) input.value = pwd;
-    }, password);
-    await wait(100);
-    await this.safeEvaluate(page, `$("#pc-login-btn").click()`);
-
-    while (true) {
-      await wait(100);
-      const isInvalid = await this.safeEvaluate<boolean>(page, `$(".content.error-tips-content").is(":visible")`).catch(() => false);
-      if (isInvalid) throw new Error("Password is Invalid for: " + page.url());
-      const isForcing = await this.safeEvaluate<boolean>(page, `$("#confirm-yes").is(":visible")`).catch(() => false);
-      if (isForcing) {
-        await this.safeEvaluate(page, `$("#confirm-yes").click()`);
-      }
-      const isLogged = await this.safeEvaluate<boolean>(page, `$("#topReboot").is(":visible")`).catch(() => false);
-      if (isLogged) break;
-    }
-    throw new Error(`Login timeout after ${LOGIN_TIMEOUT_MS}ms for: ${page.url()}`);
-  }
-
-  private static async evaluate<T>(page: Page, script: string): Promise<T> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return page.evaluate(script) as any as Promise<T>;
-  }
-
-  private static async safeEvaluate<T>(page: Page, script: string, timeoutMs = 30_000): Promise<T> {
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    try {
-      const response = await Promise.race([
-        this.evaluate<T>(page, script),
-        new Promise<"timeout call">((resolve) => {
-          timeout = setTimeout(() => resolve("timeout call"), timeoutMs);
-        }),
-      ]);
-      if (response === "timeout call") {
-        throw new Error(`Evaluate timed out after ${timeoutMs}ms for: ${page.url()}`);
-      }
-      return response;
-    } catch (error) {
-      this.browser = null;
-      this.pageList.clear();
-      throw error;
-    } finally {
-      if (timeout) clearTimeout(timeout);
-    }
-  }
-
-  private static async makeDmCall<T>(method: string, oid: string, data: Record<string, unknown> = {}, page: Page, timeoutMs = 30_000): Promise<T> {
-    const str = `(function(){
-      return new Promise((resolve, reject)=>{
-        $.dm.${method}({
-          oid: "${oid}",
-          data: ${JSON.stringify(data)},
-          callback: {
-            success: (data)=>resolve(data),
-            fail: (err)=>reject(err),
-            error: (err)=>reject(err)
-          }
-        })
-      })
-    })()`;
-    const response = await this.safeEvaluate<T>(page, str, timeoutMs);
-    return response;
+    await client.login();
+    return client;
   }
 
   private static getVendorCached(mac: string): string {
@@ -142,8 +27,11 @@ export class Router {
     return this.vendorCache.get(oui)!;
   }
 
-  private static async getConnectedEasyMeshDevices(page: Page): Promise<ConnectedDevices> {
-    const DEV2_WIFI_APDEV = await this.makeDmCall<DEV2_WIFI_APDEV[]>("getList", "DEV2_WIFI_APDEV", {}, page);
+  private static async getConnectedEasyMeshDevices(client: TpLinkClient): Promise<ConnectedDevices> {
+    const DEV2_WIFI_APDEV = await client.getList<{ data: DEV2_WIFI_APDEV[] }>("DEV2_WIFI_APDEV", {
+      stack: "0,0,0,0,0,0",
+      pstack: "0,0,0,0,0,0",
+    });
 
     function processBackLinkType(type: string) {
       if (type === "Ethernet") {
@@ -155,132 +43,150 @@ export class Router {
       }
     }
     return await Promise.all(
-      DEV2_WIFI_APDEV.filter((item) => item.X_TP_Active === "1").map(async (item) => ({
-        ip: item.X_TP_IPAddress,
-        mac: item.MACAddress,
-        name: (await Device.getDeviceNameOfMac(item.MACAddress)) || item.X_TP_HostName || "Unknown",
-        routerInterface: processBackLinkType(item.backhaulLinkType),
-        vendor: this.getVendorCached(item.MACAddress),
-      })),
+      DEV2_WIFI_APDEV.data
+        .filter((item) => item.X_TP_Active === "1")
+        .map(async (item) => ({
+          ip: item.X_TP_IPAddress,
+          mac: item.MACAddress,
+          name: (await Device.getDeviceNameOfMac(item.MACAddress)) || item.X_TP_HostName || "Unknown",
+          routerInterface: processBackLinkType(item.backhaulLinkType),
+          vendor: this.getVendorCached(item.MACAddress),
+        })),
     );
   }
 
-  private static async getConnectedWifiDevices(page: Page): Promise<ConnectedDevices> {
-    const DEV2_WIFI_APDEV_ASSOCDEV = await this.makeDmCall<DEV2_WIFI_APDEV_ASSOCDEV[]>("getList", "DEV2_WIFI_APDEV_ASSOCDEV", {}, page);
+  private static async getConnectedWifiDevices(client: TpLinkClient): Promise<ConnectedDevices> {
+    const DEV2_WIFI_APDEV_ASSOCDEV = await client.getList<{ data: DEV2_WIFI_APDEV_ASSOCDEV[] }>("DEV2_WIFI_APDEV_ASSOCDEV", {
+      stack: "0,0,0,0,0,0",
+      pstack: "0,0,0,0,0,0",
+    });
 
-    const DEV2_WIFI_APDEV_RADIO = await this.makeDmCall<DEV2_WIFI_APDEV_RADIO[]>("getList", "DEV2_WIFI_APDEV_RADIO", {}, page);
+    const DEV2_WIFI_APDEV_RADIO = await client.getList<{ data: DEV2_WIFI_APDEV_RADIO[] }>("DEV2_WIFI_APDEV_RADIO", {
+      stack: "0,0,0,0,0,0",
+      pstack: "0,0,0,0,0,0",
+    });
     function getRouterInterface(radioMac: string) {
-      const data = DEV2_WIFI_APDEV_RADIO.find((item) => item.MACAddress === radioMac);
+      const data = DEV2_WIFI_APDEV_RADIO.data.find((item) => item.MACAddress === radioMac);
       if (!data) return "Unknown";
       return `Wifi ${data.operatingFrequencyBand} GHz no Canal ${data.channel}`;
     }
 
     return await Promise.all(
-      DEV2_WIFI_APDEV_ASSOCDEV.filter((item) => item.active === "1").map(async (item) => ({
-        ip: item.X_TP_IPAddress,
-        mac: item.MACAddress,
-        name: (await Device.getDeviceNameOfMac(item.MACAddress)) || item.X_TP_HostName || "Unknown",
-        vendor: this.getVendorCached(item.MACAddress),
-        routerInterface: getRouterInterface(item.X_TP_RadioMac),
-      })),
+      DEV2_WIFI_APDEV_ASSOCDEV.data
+        .filter((item) => item.active === "1")
+        .map(async (item) => ({
+          ip: item.X_TP_IPAddress,
+          mac: item.MACAddress,
+          name: (await Device.getDeviceNameOfMac(item.MACAddress)) || item.X_TP_HostName || "Unknown",
+          vendor: this.getVendorCached(item.MACAddress),
+          routerInterface: getRouterInterface(item.X_TP_RadioMac),
+        })),
     );
   }
 
-  private static async rebootRouter(page: Page): Promise<void> {
-    await this.makeDmCall<void>("op", "ACT_REBOOT", {}, page);
+  private static async rebootRouter(client: TpLinkClient): Promise<void> {
+    await client.op<void>("ACT_REBOOT");
   }
 
-  private static async getConnectedWiredDevices(page: Page): Promise<ConnectedDevices> {
-    const DEV2_WIFI_APDEV_ETHASSOCDEV = await this.makeDmCall<DEV2_WIFI_APDEV_ETHASSOCDEV[]>("getList", "DEV2_WIFI_APDEV_ETHASSOCDEV", {}, page);
+  private static async getConnectedWiredDevices(client: TpLinkClient): Promise<ConnectedDevices> {
+    const DEV2_WIFI_APDEV_ETHASSOCDEV = await client.getList<{ data: DEV2_WIFI_APDEV_ETHASSOCDEV[] }>("DEV2_WIFI_APDEV_ETHASSOCDEV", {
+      stack: "0,0,0,0,0,0",
+      pstack: "0,0,0,0,0,0",
+    });
 
     return await Promise.all(
-      DEV2_WIFI_APDEV_ETHASSOCDEV.filter((i) => i.active === "1").map(async (i) => ({
-        ip: i.IPAddress,
-        mac: i.MACAddress,
-        name: (await Device.getDeviceNameOfMac(i.MACAddress)) || i.X_TP_HostName || "Unknown",
-        routerInterface: "Cabeada",
-        vendor: this.getVendorCached(i.MACAddress),
-      })),
+      DEV2_WIFI_APDEV_ETHASSOCDEV.data
+        .filter((i) => i.active === "1")
+        .map(async (i) => ({
+          ip: i.IPAddress,
+          mac: i.MACAddress,
+          name: (await Device.getDeviceNameOfMac(i.MACAddress)) || i.X_TP_HostName || "Unknown",
+          routerInterface: "Cabeada",
+          vendor: this.getVendorCached(i.MACAddress),
+        })),
     );
   }
 
-  private static async getConnectedDevices(page?: Page): Promise<ConnectedDevices> {
-    if (!page) {
+  private static async getConnectedDevices(client?: TpLinkClient): Promise<ConnectedDevices> {
+    if (!client) {
       const controller = await Device.getControllerRouter();
       if (!controller) {
         throw new Error("No controller router registered. Please register a router controller first.");
       }
 
-      page = await this.getPage(controller.ip, controller.password);
+      client = await this.getRouterClient(controller.ip, controller.password);
     }
-    const result = await Promise.all([this.getConnectedEasyMeshDevices(page), this.getConnectedWifiDevices(page), this.getConnectedWiredDevices(page)]);
+    const result = await Promise.all([this.getConnectedEasyMeshDevices(client), this.getConnectedWifiDevices(client), this.getConnectedWiredDevices(client)]);
     return result.flat().filter((result) => result.ip !== "");
   }
 
-  private static async listDHCPEntry(page?: Page): Promise<DhcpEntries> {
-    if (!page) {
+  private static async listDHCPEntry(client?: TpLinkClient): Promise<DhcpEntries> {
+    if (!client) {
       const controller = await Device.getControllerRouter();
       if (!controller) {
         throw new Error("No controller router registered. Please register a router controller first.");
       }
 
-      page = await this.getPage(controller.ip, controller.password);
+      client = await this.getRouterClient(controller.ip, controller.password);
     }
-    const DEV2_DHCPV4_POOL_STATICADDR = await this.makeDmCall<DEV2_DHCPV4_POOL_STATICADDR[]>("getList", "DEV2_DHCPV4_POOL_STATICADDR", {}, page);
-    return DEV2_DHCPV4_POOL_STATICADDR.map((e) => ({
+
+    const DEV2_DHCPV4_POOL_STATICADDR = await client.getList<{ data: DEV2_DHCPV4_POOL_STATICADDR[] }>("DEV2_DHCPV4_POOL_STATICADDR", {
+      stack: "0,0,0,0,0,0",
+      pstack: "0,0,0,0,0,0",
+    });
+    return DEV2_DHCPV4_POOL_STATICADDR.data.map((e) => ({
       ip: e.yiaddr,
       mac: e.chaddr,
       entryId: e.stack,
     }));
   }
 
-  private static async addDHCPEntry(mac: string, ip: string, page?: Page): Promise<string> {
-    if (!page) {
+  private static async addDHCPEntry(mac: string, ip: string, client?: TpLinkClient): Promise<string> {
+    if (!client) {
       const controller = await Device.getControllerRouter();
       if (!controller) {
         throw new Error("No controller router registered. Please register a router controller first.");
       }
 
-      page = await this.getPage(controller.ip, controller.password);
+      client = await this.getRouterClient(controller.ip, controller.password);
     }
-    const result = await this.makeDmCall<{ stack: string }>(
-      "add",
-      "DEV2_DHCPV4_POOL_STATICADDR",
-      {
-        chaddr: mac,
-        yiaddr: ip,
-        enable: "1",
-        pstack: "1,0,0,0,0,0",
-      },
-      page,
-    );
+    const result = await client.add<{ data: { stack: string } }>("DEV2_DHCPV4_POOL_STATICADDR", {
+      chaddr: mac,
+      yiaddr: ip,
+      enable: "1",
+      pstack: "1,0,0,0,0,0",
+      stack: "0,0,0,0,0,0",
+    });
 
-    return result.stack;
+    return result.data.stack;
   }
 
-  private static async removeDHCPEntry(id: string, page?: Page) {
-    if (!page) {
+  private static async removeDHCPEntry(id: string, client?: TpLinkClient) {
+    if (!client) {
       const controller = await Device.getControllerRouter();
       if (!controller) {
         throw new Error("No controller router registered. Please register a router controller first.");
       }
 
-      page = await this.getPage(controller.ip, controller.password);
+      client = await this.getRouterClient(controller.ip, controller.password);
     }
-    await this.makeDmCall<void>("del", "DEV2_DHCPV4_POOL_STATICADDR", { stack: id }, page);
+    await client.del<void>("DEV2_DHCPV4_POOL_STATICADDR", { stack: id, pstack: "1,0,0,0,0,0" });
   }
 
-  private static async listFirewallChains(page?: Page) {
-    if (!page) {
+  private static async listFirewallChains(client?: TpLinkClient) {
+    if (!client) {
       const controller = await Device.getControllerRouter();
       if (!controller) {
         throw new Error("No controller router registered. Please register a router controller first.");
       }
-      page = await this.getPage(controller.ip, controller.password);
+      client = await this.getRouterClient(controller.ip, controller.password);
     }
-    const chains = await this.makeDmCall<DEV2_FW_CHAIN[]>("getList", "DEV2_FW_CHAIN", {}, page);
+    const chains = await client.getList<{ data: DEV2_FW_CHAIN[] }>("DEV2_FW_CHAIN", {
+      pstack: "0,0,0,0,0,0",
+      stack: "0,0,0,0,0,0",
+    });
 
-    return chains.map((c) => ({
+    return chains.data.map((c) => ({
       name: c.name,
       enable: c.enable,
       ruleNumberOfEntries: c.ruleNumberOfEntries,
@@ -288,16 +194,16 @@ export class Router {
     }));
   }
 
-  private static async listFirewallRules(page?: Page) {
-    if (!page) {
+  private static async listFirewallRules(client?: TpLinkClient) {
+    if (!client) {
       const controller = await Device.getControllerRouter();
       if (!controller) {
         throw new Error("No controller router registered. Please register a router controller first.");
       }
-      page = await this.getPage(controller.ip, controller.password);
+      client = await this.getRouterClient(controller.ip, controller.password);
     }
-    const rawRules = await this.makeDmCall<DEV2_FW_CHAIN_RULE[]>("getList", "DEV2_FW_CHAIN_RULE", { pstack: "" }, page);
-    const rules = rawRules.map((r) => ({
+    const rawRules = await client.getList<{ data: DEV2_FW_CHAIN_RULE[] }>("DEV2_FW_CHAIN_RULE", { pstack: "0,0,0,0,0,0", stack: "0,0,0,0,0,0" });
+    const rules = rawRules.data.map((r) => ({
       ruleName: r.X_TP_RuleName,
       ruleType: r.X_TP_RuleType,
       sourceType: r.X_TP_SourceType,
@@ -318,44 +224,46 @@ export class Router {
       sourceMAC: string;
       sourceIP?: string;
       target?: string;
+      stack: string;
     },
-    page?: Page,
+    client?: TpLinkClient,
   ): Promise<string> {
-    if (!page) {
+    if (!client) {
       const controller = await Device.getControllerRouter();
       if (!controller) {
         throw new Error("No controller router registered. Please register a router controller first.");
       }
 
-      page = await this.getPage(controller.ip, controller.password);
+      client = await this.getRouterClient(controller.ip, controller.password);
     }
     const data: Record<string, unknown> = {
-      enable: 1,
-      X_TP_RuleType: 2,
+      enable: "1",
+      X_TP_RuleType: "2",
       X_TP_RuleName: params.name,
-      X_TP_SourceType: 2,
+      X_TP_SourceType: "2",
       X_TP_SourceMACAddress: params.sourceMAC,
       pstack: params.chainStack,
       target: params.target || "Drop",
+      stack: params.stack,
     };
     if (params.sourceIP) {
       data.sourceIP = params.sourceIP;
     }
-    const result = await this.makeDmCall<{ stack: string }>("add", "DEV2_FW_CHAIN_RULE", data, page);
+    const result = await client.add<{ data: { stack: string } }>("DEV2_FW_CHAIN_RULE", data);
 
-    return result.stack;
+    return result.data.stack;
   }
 
-  private static async removeFirewallRule(ruleStack: string, page?: Page) {
-    if (!page) {
+  private static async removeFirewallRule(ruleStack: string, client?: TpLinkClient) {
+    if (!client) {
       const controller = await Device.getControllerRouter();
       if (!controller) {
         throw new Error("No controller router registered. Please register a router controller first.");
       }
 
-      page = await this.getPage(controller.ip, controller.password);
+      client = await this.getRouterClient(controller.ip, controller.password);
     }
-    await this.makeDmCall<void>("del", "DEV2_FW_CHAIN_RULE", { stack: ruleStack }, page);
+    await client.del<void>("DEV2_FW_CHAIN_RULE", { stack: ruleStack, pstack: "0,0,0,0,0,0" });
   }
 
   static async restartNetwork() {
@@ -364,47 +272,64 @@ export class Router {
     const agents = allRouters.filter((r) => !r.isController);
     for (const agent of agents) {
       try {
-        const page = await this.getPage(agent.ip, agent.password);
-        await this.rebootRouter(page);
+        const client = await this.getRouterClient(agent.ip, agent.password);
+        await this.rebootRouter(client);
       } catch (error) {
         console.error(`Error rebooting agent ${agent.ip}:`, error);
       }
     }
     if (controller) {
       try {
-        const page = await this.getPage(controller.ip, controller.password);
-        await this.rebootRouter(page);
+        const client = await this.getRouterClient(controller.ip, controller.password);
+        await this.rebootRouter(client);
       } catch (error) {
         console.error(`Error rebooting controller ${controller.ip}:`, error);
       }
     }
   }
 
-  private static async getStatus(page?: Page): Promise<RouterStatus> {
-    if (!page) {
+  private static async getStatus(client?: TpLinkClient): Promise<RouterStatus> {
+    if (!client) {
       const controller = await Device.getControllerRouter();
       if (!controller) {
         throw new Error("No controller router registered. Please register a router controller first.");
       }
 
-      page = await this.getPage(controller.ip, controller.password);
+      client = await this.getRouterClient(controller.ip, controller.password);
     }
-    const [wanInfo, devInfo, memoryStatus, procStatus] = await Promise.all([this.makeDmCall<DEV2_ADT_WAN[]>("getList", "DEV2_ADT_WAN", {}, page), this.makeDmCall<DEV2_DEV_INFO>("get", "DEV2_DEV_INFO", {}, page), this.makeDmCall<DEV2_MEM_STATUS>("get", "DEV2_MEM_STATUS", {}, page), this.makeDmCall<DEV2_PROC_STATUS>("get", "DEV2_PROC_STATUS", {}, page)]);
+    const [wanInfo, devInfo, memoryStatus, procStatus] = await Promise.all([
+      client.getList<{ data: DEV2_ADT_WAN[] }>("DEV2_ADT_WAN", {
+        pstack: "0,0,0,0,0,0",
+        stack: "0,0,0,0,0,0",
+      }),
+      client.get<{ data: DEV2_DEV_INFO }>("DEV2_DEV_INFO", {
+        pstack: "0,0,0,0,0,0",
+        stack: "0,0,0,0,0,0",
+      }),
+      client.get<{ data: DEV2_MEM_STATUS }>("DEV2_MEM_STATUS", {
+        pstack: "0,0,0,0,0,0",
+        stack: "0,0,0,0,0,0",
+      }),
+      client.get<{ data: DEV2_PROC_STATUS }>("DEV2_PROC_STATUS", {
+        pstack: "0,0,0,0,0,0",
+        stack: "0,0,0,0,0,0",
+      }),
+    ]);
 
-    const wanIp = wanInfo.at(0)?.connIPv4Address ?? "";
-    const connectionStatus = wanInfo.at(0)?.connStatusV4;
-    const connectionUptime = Number(wanInfo.at(0)?.X_TP_Uptime);
-    const totalDownload = Number(wanInfo.at(0)?.X_TP_BytesReceived);
-    const totalUpload = Number(wanInfo.at(0)?.X_TP_BytesSent);
+    const wanIp = wanInfo.data.at(0)?.connIPv4Address ?? "";
+    const connectionStatus = wanInfo.data.at(0)?.connStatusV4;
+    const connectionUptime = Number(wanInfo.data.at(0)?.X_TP_Uptime);
+    const totalDownload = Number(wanInfo.data.at(0)?.X_TP_BytesReceived);
+    const totalUpload = Number(wanInfo.data.at(0)?.X_TP_BytesSent);
 
-    const routerUptime = Number(devInfo.upTime);
+    const routerUptime = Number(devInfo.data.upTime);
 
-    const freeMemory = Number(memoryStatus.free);
-    const totalMemory = Number(memoryStatus.total);
+    const freeMemory = Number(memoryStatus.data.free);
+    const totalMemory = Number(memoryStatus.data.total);
     const usedMemory = totalMemory - freeMemory;
     const memoryUsage = parseInt(((usedMemory / totalMemory) * 100).toString());
 
-    const cpuUsage = Number(procStatus.CPUUsage);
+    const cpuUsage = Number(procStatus.data.CPUUsage);
 
     // Helper to format seconds to human readable
     const formatUptime = (totalSeconds: number): string => {
@@ -434,8 +359,8 @@ export class Router {
       connectionStatus: connectionStatus || "Unknown",
       connectionUptime: formatUptime(connectionUptime),
       routerUptime: formatUptime(routerUptime),
-      firmwareVersion: devInfo?.softwareVersion || "N/A",
-      hardwareVersion: devInfo?.hardwareVersion || "N/A",
+      firmwareVersion: devInfo?.data.softwareVersion || "N/A",
+      hardwareVersion: devInfo?.data.hardwareVersion || "N/A",
       cpuUsage,
       memoryUsage,
       totalDownload: formatBytes(totalDownload),
@@ -445,7 +370,7 @@ export class Router {
 
   // Data Sync Between Database and Router
 
-  private static async syncDhcp(page: Page): Promise<void> {
+  private static async syncDhcp(client: TpLinkClient): Promise<void> {
     const dbInterfaces = await db.query.interfaces.findMany({
       where: {
         reservedIp: true,
@@ -457,7 +382,7 @@ export class Router {
 
     const interfacesToSync = dbInterfaces.filter((i) => i.device?.type === "client" || (i.device?.type === "router" && !i.device.isController));
 
-    const routerEntries = await this.listDHCPEntry(page);
+    const routerEntries = await this.listDHCPEntry(client);
 
     const dbMacs = new Set(interfacesToSync.map((i) => normalizeMac(i.mac)));
     const routerMacToEntry = new Map(routerEntries.map((e) => [normalizeMac(e.mac), e]));
@@ -465,7 +390,7 @@ export class Router {
     for (const entry of routerEntries) {
       const normalizedMac = normalizeMac(entry.mac);
       if (!dbMacs.has(normalizedMac)) {
-        await Router.removeDHCPEntry(entry.entryId, page).catch((e) => {
+        await Router.removeDHCPEntry(entry.entryId, client).catch((e) => {
           console.error(`Failed to remove DHCP entry for ${entry.mac}: ${e instanceof Error ? e.message : String(e)}`);
         });
       }
@@ -474,14 +399,29 @@ export class Router {
     for (const iface of interfacesToSync) {
       const normalizedMac = normalizeMac(iface.mac);
       if (!routerMacToEntry.has(normalizedMac)) {
-        await Router.addDHCPEntry(iface.mac, iface.ip, page).catch((e) => {
+        await Router.addDHCPEntry(iface.mac, iface.ip, client).catch((e) => {
           console.error(`Failed to add DHCP entry for ${iface.mac}: ${e instanceof Error ? e.message : String(e)}`);
         });
       }
     }
   }
 
-  private static async syncFirewall(page: Page): Promise<void> {
+  private static async getAvailableFirewallRuleStackId(client: TpLinkClient): Promise<number> {
+    const chains = await this.listFirewallChains(client);
+
+    const accessChain = chains.find((c) => c.name === "ACCESSCTL_WHITE");
+    const allRouterRules = await this.listFirewallRules(client);
+    if (!accessChain) {
+      throw new Error("Missing access chain");
+    }
+    const chainId = accessChain.stack.split(",")[0];
+    const routerRules = allRouterRules.filter((r) => r.stack.split(",")[0] === chainId);
+    const ids = routerRules.map((r) => Number(r.stack.split(",").at(1))).sort((a, b) => a - b);
+    const lastId = ids.length > 0 ? ids.at(-1)! : 0;
+    return lastId + 1;
+  }
+
+  private static async syncFirewall(client: TpLinkClient): Promise<void> {
     const dbInterfaces = await db.query.interfaces.findMany({
       where: {
         allowList: true,
@@ -493,15 +433,16 @@ export class Router {
 
     const clientInterfaces = dbInterfaces.filter((i) => i.device?.type === "client");
 
-    const chains = await this.listFirewallChains(page);
+    const chains = await this.listFirewallChains(client);
     const accessChain = chains.find((c) => c.name === "ACCESSCTL_WHITE");
 
     if (!accessChain) {
       return;
     }
 
-    const allRouterRules = await this.listFirewallRules(page);
-    const routerRules = allRouterRules.filter((r) => r.stack[0] === accessChain.stack[0]);
+    const allRouterRules = await this.listFirewallRules(client);
+    const accessChainId = accessChain.stack.split(",")[0];
+    const routerRules = allRouterRules.filter((r) => r.stack.split(",")[0] === accessChainId);
 
     const dbMacs = new Set(clientInterfaces.map((i) => normalizeMac(i.mac)));
     const routerMacToRule = new Map(routerRules.map((r) => [normalizeMac(r.sourceMAC), r]));
@@ -509,7 +450,7 @@ export class Router {
     for (const rule of routerRules) {
       const normalizedMac = normalizeMac(rule.sourceMAC);
       if (!dbMacs.has(normalizedMac)) {
-        await this.removeFirewallRule(rule.stack, page).catch((e) => {
+        await this.removeFirewallRule(rule.stack, client).catch((e) => {
           console.error(`Failed to remove firewall rule for ${rule.sourceMAC}: ${e instanceof Error ? e.message : String(e)}`);
         });
       }
@@ -518,14 +459,17 @@ export class Router {
     for (const iface of clientInterfaces) {
       const normalizedMac = normalizeMac(iface.mac);
       if (!routerMacToRule.has(normalizedMac)) {
+        const currentRuleChain = await this.getAvailableFirewallRuleStackId(client);
+        const chainId = accessChain.stack.split(",")[0];
         await Router.addFirewallRule(
           {
             chainStack: accessChain.stack,
             name: iface.name,
             sourceMAC: iface.mac,
             target: "Accept",
+            stack: `${chainId},${currentRuleChain},0,0,0,0`,
           },
-          page,
+          client,
         ).catch((e) => {
           console.error(`Failed to add firewall rule for ${iface.mac}: ${e instanceof Error ? e.message : String(e)}`);
         });
@@ -533,8 +477,8 @@ export class Router {
     }
   }
 
-  private static async syncConnectedDevices(page: Page): Promise<void> {
-    const devices = await this.getConnectedDevices(page);
+  private static async syncConnectedDevices(client: TpLinkClient): Promise<void> {
+    const devices = await this.getConnectedDevices(client);
     const checkId = crypto.randomUUID();
 
     await db.insert(onlineChecks).values({
@@ -556,8 +500,8 @@ export class Router {
     }
   }
 
-  private static async syncRouterStatus(page: Page): Promise<void> {
-    const status = await this.getStatus(page);
+  private static async syncRouterStatus(client: TpLinkClient): Promise<void> {
+    const status = await this.getStatus(client);
     await Settings.saveStatus(status);
   }
 
@@ -568,11 +512,11 @@ export class Router {
         throw new Error("No controller router registered. Please register a router controller first.");
       }
 
-      const page = await this.getPage(controller.ip, controller.password);
-      await this.syncDhcp(page);
-      await this.syncFirewall(page);
-      await this.syncConnectedDevices(page);
-      await this.syncRouterStatus(page);
+      const client = await this.getRouterClient(controller.ip, controller.password);
+      await this.syncDhcp(client);
+      await this.syncFirewall(client);
+      await this.syncConnectedDevices(client);
+      await this.syncRouterStatus(client);
     } catch (error) {
       console.error("Error syncing router settings:", error);
       throw new Error("Error syncing router settings: " + (error instanceof Error ? error.message : String(error)));
