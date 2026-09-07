@@ -23,7 +23,20 @@ ENV NODE_ENV=production
 RUN apt-get update && apt-get install -y iproute2 && rm -rf /var/lib/apt/lists/*
 
 # Create entrypoint script to configure routes for external network access
-RUN printf '#!/bin/sh\n# Add route for external network (192.168.0.0/24) if running in Docker network\n# Detect gateway from default route\nGATEWAY=$(ip route | grep "^default" | awk '"'{print $3}'"')\nINTERFACE=$(ip route | grep "^default" | awk '"'{print $5}'"')\nif [ -n "$GATEWAY" ] && [ -n "$INTERFACE" ]; then\n  ip route add 192.168.0.0/24 via $GATEWAY dev $INTERFACE 2>/dev/null || true\nfi\n# Execute the main application\nexec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
+RUN cat > /entrypoint.sh << 'ENDSCRIPT'
+#!/bin/sh
+# Add route for external network (192.168.0.0/24) if running in Docker network
+# Detect gateway and interface from default route
+DEFAULT_ROUTE=$(ip route | grep '^default')
+GATEWAY=$(echo "$DEFAULT_ROUTE" | awk '{print $3}')
+INTERFACE=$(echo "$DEFAULT_ROUTE" | awk '{print $5}')
+if [ -n "$GATEWAY" ] && [ -n "$INTERFACE" ]; then
+  ip route add 192.168.0.0/24 via $GATEWAY dev $INTERFACE 2>/dev/null || true
+fi
+# Execute the main application
+exec "$@"
+ENDSCRIPT
+RUN chmod +x /entrypoint.sh
 
 COPY --from=builder /app/.next/standalone /app
 COPY --from=builder /app/public /app/public
