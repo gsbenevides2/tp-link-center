@@ -19,6 +19,22 @@ RUN bun run build
 FROM oven/bun:latest AS runner
 ENV NODE_ENV=production
 
+# Install iproute2 for routing configuration
+RUN apt-get update && apt-get install -y iproute2 && rm -rf /var/lib/apt/lists/*
+
+# Create entrypoint script to configure routes for external network access
+RUN echo '#!/bin/sh
+set -e
+# Add route for external network (192.168.0.0/24) if running in Docker network
+if [ -n "$DOCKER_NETWORK_GATEWAY" ]; then
+  ip route add 192.168.0.0/24 via $DOCKER_NETWORK_GATEWAY dev eth0 2>/dev/null || true
+else
+  # Default gateway for coolify network
+  ip route add 192.168.0.0/24 via 10.0.1.1 dev eth0 2>/dev/null || true
+fi
+# Execute the main application
+exec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
+
 COPY --from=builder /app/.next/standalone /app
 COPY --from=builder /app/public /app/public
 COPY --from=builder /app/.next/static /app/.next/static
@@ -31,4 +47,5 @@ LABEL org.opencontainers.image.source=https://github.com/gsbenevides2/tp-link-ce
 LABEL org.opencontainers.image.description="TP Link Center is Admin Dashboard to manager my tplink routers."
 LABEL org.opencontainers.image.licenses=MIT
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["bun", "/app/server.js"]
