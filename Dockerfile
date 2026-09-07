@@ -19,6 +19,9 @@ RUN bun run build
 FROM oven/bun:latest AS runner
 ENV NODE_ENV=production
 
+# Install network utilities for host network access
+RUN apt-get update && apt-get install -y iputils-ping iproute2 curl && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /app/.next/standalone /app
 COPY --from=builder /app/public /app/public
 COPY --from=builder /app/.next/static /app/.next/static
