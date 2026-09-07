@@ -23,7 +23,7 @@ ENV NODE_ENV=production
 RUN apt-get update && apt-get install -y iproute2 && rm -rf /var/lib/apt/lists/*
 
 # Create entrypoint script to configure routes for external network access
-RUN mkdir -p /tmp/script && printf '#!/bin/sh\nset -e\n# Add route for external network (192.168.0.0/24) if running in Docker network\nif [ -n "$DOCKER_NETWORK_GATEWAY" ]; then\n  ip route add 192.168.0.0/24 via $DOCKER_NETWORK_GATEWAY dev eth0 2>/dev/null || true\nelse\n  # Default gateway for coolify network\n  ip route add 192.168.0.0/24 via 10.0.1.1 dev eth0 2>/dev/null || true\nfi\n# Execute the main application\nexec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
+RUN printf '#!/bin/sh\n# Add route for external network (192.168.0.0/24) if running in Docker network\n# Try to find the interface connected to the Coolify network (10.0.x.x)\nGATEWAY=${DOCKER_NETWORK_GATEWAY:-10.0.1.1}\nINTERFACE=$(ip route | grep "10.0" | awk '"'{print $NF}'"' | head -1)\nif [ -n "$INTERFACE" ]; then\n  ip route add 192.168.0.0/24 via $GATEWAY dev $INTERFACE 2>/dev/null || true\nelse\n  # Fallback to eth1 (common for Coolify)\n  ip route add 192.168.0.0/24 via $GATEWAY dev eth1 2>/dev/null || true\nfi\n# Execute the main application\nexec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
 
 COPY --from=builder /app/.next/standalone /app
 COPY --from=builder /app/public /app/public
