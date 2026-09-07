@@ -23,7 +23,8 @@ ENV NODE_ENV=production
 RUN apt-get update && apt-get install -y iproute2 && rm -rf /var/lib/apt/lists/*
 
 # Create entrypoint script to configure routes for external network access
-RUN echo '#!/bin/sh
+RUN cat > /entrypoint.sh << 'EOF'
+#!/bin/sh
 set -e
 # Add route for external network (192.168.0.0/24) if running in Docker network
 if [ -n "$DOCKER_NETWORK_GATEWAY" ]; then
@@ -33,7 +34,9 @@ else
   ip route add 192.168.0.0/24 via 10.0.1.1 dev eth0 2>/dev/null || true
 fi
 # Execute the main application
-exec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
+exec "$@"
+EOF
+RUN chmod +x /entrypoint.sh
 
 COPY --from=builder /app/.next/standalone /app
 COPY --from=builder /app/public /app/public
